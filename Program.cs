@@ -9,6 +9,7 @@
 /* Maritime Command & Rescue Platform
 
 Incident
+ ├── ID (case number)
  ├── Type
  ├── Description
  ├── Coordinates
@@ -17,13 +18,16 @@ Incident
  ├── Assigned Rescue Units
  └── Operational Log Entries
 
+
 Rescue Unit
  ├── Name
  ├── Type
  ├── Status
  └── Coordinates
 
+
 Operational Log Entry
+ ├── Incident ID
  ├── Timestamp
  ├── Coordinates
  ├── Rescue Unit
