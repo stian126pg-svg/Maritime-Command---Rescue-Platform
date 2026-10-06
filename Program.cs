@@ -40,24 +40,24 @@ Operational Log Entry
 
 /*REGISTER INCIDENT
 
-Receive type, description, latitude and longitude
 
+Receive type, description, latitude and longitude
 
 IF(incident type is not one of our five accepted categories) 
     Reject with "Select supported incident type"
-    STOP
+    STOP;
 
 IF(description missing, empty or contains only spaces)
     Reject with "Please provide an incident description"
-    STOP
+    STOP;
 
 IF(latitude is outside -90 to 90)
     Reject with "Latitude is out of range"
-    STOP
+    STOP;
 
 IF(longitude is outside -180 to 180)
     Reject with "Longitude is out of range"
-    STOP
+    STOP;
 
 Create incident with:
     [Id]: (Generate unique ID here)
@@ -70,3 +70,79 @@ Create incident with:
 Store incident
 Return incident
 */
+
+
+
+var incident = new Incident
+{
+    Type = IncidentType.Fire,
+    Status = IncidentStatus.Reported,
+    Description = "Smoke reported aboard a fishing vessel.",
+    Latitude = 59.03,
+    Longitude = 9.72,
+    ReportedAt = DateTimeOffset.UtcNow
+};
+
+
+var secondIncident = new Incident
+{
+    Type = IncidentType.MedicalEmergency,
+    Status = IncidentStatus.Concluded,
+    Description = "Medical Emergency aboard a civilian vessel.",
+    Latitude = 31.89,
+    Longitude = 99.01,
+    ReportedAt = DateTimeOffset.UtcNow
+};
+
+var incidents = new List<Incident>();
+incidents.Add(incident);
+incidents.Add(secondIncident);
+
+
+foreach (var currentIncident in incidents)
+{
+    if (currentIncident.Status != IncidentStatus.Concluded)
+    {
+        Console.WriteLine($"{currentIncident.Type} [{currentIncident.Status}]: {currentIncident.Description}");
+    }
+}
+
+
+/*Console.WriteLine(incident.Type);
+Console.WriteLine(incident.Status);
+Console.WriteLine(incident.Description);
+Console.WriteLine(incident.ReportedAt);
+Console.WriteLine(secondIncident.Type);
+Console.WriteLine(secondIncident.Status);
+Console.WriteLine(secondIncident.Description);
+Console.WriteLine(secondIncident.ReportedAt);*/
+
+public enum IncidentType
+{
+    Fire,
+    MedicalEmergency,
+    TechnicalFailure,
+    EmergencyEvacuation,
+    SearchAndRescue
+}
+
+public enum IncidentStatus
+{
+    Reported,
+    Ongoing,
+    Concluded
+}
+
+
+
+public class Incident
+{
+    public int Id { get; set; }
+    public IncidentType Type { get; set; }
+    public string Description { get; set; } = "";
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public DateTimeOffset ReportedAt { get; set; }
+    public IncidentStatus Status { get; set; }
+}
+
