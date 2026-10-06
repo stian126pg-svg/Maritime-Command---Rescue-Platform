@@ -33,3 +33,40 @@ Operational Log Entry
  ├── Rescue Unit
  └── Message
  */
+
+
+
+
+
+/*REGISTER INCIDENT
+
+Receive type, description, latitude and longitude
+
+
+IF(incident type is not one of our five accepted categories) 
+    Reject with "Select supported incident type"
+    STOP
+
+IF(description missing, empty or contains only spaces)
+    Reject with "Please provide an incident description"
+    STOP
+
+IF(latitude is outside -90 to 90)
+    Reject with "Latitude is out of range"
+    STOP
+
+IF(longitude is outside -180 to 180)
+    Reject with "Longitude is out of range"
+    STOP
+
+Create incident with:
+    [Id]: (Generate unique ID here)
+    [ReportedAt]: (Record the current timestamp here)
+    [Status]: (Reported)
+    [type/Type]: (Example: Fire. Search and Rescue. Medical Emergency.)
+    [Description]: (Example: "Smoke/Fire reported at Vessel.)
+	[Location]: (Example: Latitude 56. Longitude 112)
+
+Store incident
+Return incident
+*/
