@@ -1,4 +1,5 @@
 ﻿using MaritimeCommand.Models;
+using MaritimeCommand.Services;
 
 
 // A maritime emergency coordination system that: 
@@ -50,7 +51,7 @@ IF(incident type is not one of our five accepted categories)
     Reject with "Select supported incident type"
     STOP;*/
 
-string description = "Smoke?";
+/*string description = "Smoke?";
 
 if (string.IsNullOrWhiteSpace(description))
     {
@@ -88,7 +89,30 @@ var registeredIncident = new Incident
     Longitude = longitude,
     ReportedAt = DateTimeOffset.UtcNow
 };
+*/
 
+// Create the service that knows our registration rules.
+var incidentService = new IncidentService();
+
+// And declared here, so the list-building code below can use it.
+Incident registeredIncident;
+
+try
+{
+    registeredIncident = incidentService.RegisterIncident(
+        IncidentType.Fire,
+        "Smoke?",
+        90,
+        180);
+
+    Console.WriteLine("Validation passed.");
+}
+
+catch (ArgumentException error)
+{
+    Console.WriteLine(error.Message);
+    return;
+}
 
 
 
