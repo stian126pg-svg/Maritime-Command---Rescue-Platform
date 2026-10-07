@@ -1,4 +1,7 @@
-﻿// A maritime emergency coordination system that: 
+﻿using MaritimeCommand.Models;
+
+
+// A maritime emergency coordination system that: 
 // 1. Registers incidents
 // 2. Tracks rescue units and their availability
 // 3. Assigns suitable units to emergencies
@@ -45,20 +48,52 @@ Receive type, description, latitude and longitude
 
 IF(incident type is not one of our five accepted categories) 
     Reject with "Select supported incident type"
-    STOP;
+    STOP;*/
 
-IF(description missing, empty or contains only spaces)
-    Reject with "Please provide an incident description"
-    STOP;
+string description = "Smoke?";
 
-IF(latitude is outside -90 to 90)
-    Reject with "Latitude is out of range"
-    STOP;
+if (string.IsNullOrWhiteSpace(description))
+    {
+        Console.WriteLine("Please provide an incident description");
+        return;
+    }
 
-IF(longitude is outside -180 to 180)
-    Reject with "Longitude is out of range"
-    STOP;
 
+double latitude = 90;
+
+if (latitude < -90 || latitude > 90)
+{
+    Console.WriteLine("Latitude is out of range.");
+    return;
+}
+
+
+double longitude = 180;
+
+if (longitude < -180 || longitude > 180)
+{
+    Console.WriteLine("Longitude is out of range.");
+    return;
+}
+
+Console.WriteLine("Validation passed.");
+
+
+var registeredIncident = new Incident
+{
+    Type = IncidentType.Fire,
+    Status = IncidentStatus.Reported,
+    Description = description,
+    Latitude = latitude,
+    Longitude = longitude,
+    ReportedAt = DateTimeOffset.UtcNow
+};
+
+
+
+
+
+/*
 Create incident with:
     [Id]: (Generate unique ID here)
     [ReportedAt]: (Record the current timestamp here)
@@ -76,7 +111,7 @@ Return incident
 var incident = new Incident
 {
     Type = IncidentType.Fire,
-    Status = IncidentStatus.Reported,
+    Status = IncidentStatus.Concluded,
     Description = "Smoke reported aboard a fishing vessel.",
     Latitude = 59.03,
     Longitude = 9.72,
@@ -87,7 +122,7 @@ var incident = new Incident
 var secondIncident = new Incident
 {
     Type = IncidentType.MedicalEmergency,
-    Status = IncidentStatus.Concluded,
+    Status = IncidentStatus.Reported,
     Description = "Medical Emergency aboard a civilian vessel.",
     Latitude = 31.89,
     Longitude = 99.01,
@@ -97,14 +132,12 @@ var secondIncident = new Incident
 var incidents = new List<Incident>();
 incidents.Add(incident);
 incidents.Add(secondIncident);
+incidents.Add(registeredIncident);
 
 
 foreach (var currentIncident in incidents)
-{
-    if (currentIncident.Status != IncidentStatus.Concluded)
-    {
-        Console.WriteLine($"{currentIncident.Type} [{currentIncident.Status}]: {currentIncident.Description}");
-    }
+{   
+    Console.WriteLine($"{currentIncident.Type} [{currentIncident.Status}]: {currentIncident.Description}");
 }
 
 
@@ -116,33 +149,3 @@ Console.WriteLine(secondIncident.Type);
 Console.WriteLine(secondIncident.Status);
 Console.WriteLine(secondIncident.Description);
 Console.WriteLine(secondIncident.ReportedAt);*/
-
-public enum IncidentType
-{
-    Fire,
-    MedicalEmergency,
-    TechnicalFailure,
-    EmergencyEvacuation,
-    SearchAndRescue
-}
-
-public enum IncidentStatus
-{
-    Reported,
-    Ongoing,
-    Concluded
-}
-
-
-
-public class Incident
-{
-    public int Id { get; set; }
-    public IncidentType Type { get; set; }
-    public string Description { get; set; } = "";
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
-    public DateTimeOffset ReportedAt { get; set; }
-    public IncidentStatus Status { get; set; }
-}
-
