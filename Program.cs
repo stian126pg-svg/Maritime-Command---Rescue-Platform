@@ -72,23 +72,8 @@ catch (ArgumentException error)
     return;
 }
 
-/*
-Create incident with:
-    [Id]: (Generate unique ID here)
-    [ReportedAt]: (Record the current timestamp here)
-    [Status]: (Reported)
-    [type/Type]: (Example: Fire. Search and Rescue. Medical Emergency.)
-    [Description]: (Example: "Smoke/Fire reported at Vessel.)
-	[Location]: (Example: Latitude 56. Longitude 112)
-
-Store incident
-Return incident
-*/
-
-var incidents = new List<Incident>();
-
-incidents.Add(registeredIncident);
-incidents.Add(anotherRegisteredIncident);
+// Ask the service for the incidents it has registered.
+var incidents = incidentService.GetIncidents();
 
 foreach (var currentIncident in incidents)
 {   

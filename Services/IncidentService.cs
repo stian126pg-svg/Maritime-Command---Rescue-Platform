@@ -5,6 +5,9 @@ namespace MaritimeCommand.Services;
 // Handles the rules for registering incidents.
 public class IncidentService
 {
+    // Holds registered incidents while this service instance exists.
+    private readonly List<Incident> _incidents = new();
+    
     // The next ID available for a successful registration.
     private int _nextIncidentId = 1;
 
@@ -39,7 +42,8 @@ public class IncidentService
         }
 
         // Finally, reaching this point means every validation check has passed.
-        return new Incident
+        // We then make a incident.
+        var incident = new Incident
         {
             Id = _nextIncidentId++,
             Type = type,
@@ -50,5 +54,16 @@ public class IncidentService
             ReportedAt = DateTimeOffset.UtcNow
         };
 
+        // Keep the successfully registered incident in our collection.
+        _incidents.Add(incident);
+
+        // Give the caller the incident we just registered.
+        return incident;
+    }
+    
+    // Provides a read-only view of the registered incident collection.
+    public IReadOnlyList<Incident> GetIncidents()
+    {
+        return _incidents.AsReadOnly();
     }
 }
