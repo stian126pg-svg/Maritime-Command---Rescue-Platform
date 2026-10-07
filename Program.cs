@@ -81,3 +81,15 @@ foreach (var currentIncident in incidents)
         $"#{currentIncident.Id} - {currentIncident.Type} " +
         $"[{currentIncident.Status}]: {currentIncident.Description}");
 }
+
+// Look up one particular case/incident once.
+var selectedIncident = incidentService.GetIncidentById(2);
+
+if (selectedIncident is null)
+{
+    Console.WriteLine("Incident not found");
+}
+else
+{
+    Console.WriteLine($"Selected case #{selectedIncident.Id}: " + selectedIncident.Description);
+}

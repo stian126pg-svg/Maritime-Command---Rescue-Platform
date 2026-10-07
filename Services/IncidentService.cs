@@ -1,3 +1,4 @@
+using System.Reflection.Metadata.Ecma335;
 using MaritimeCommand.Models;
 
 namespace MaritimeCommand.Services;
@@ -65,5 +66,20 @@ public class IncidentService
     public IReadOnlyList<Incident> GetIncidents()
     {
         return _incidents.AsReadOnly();
+    }
+
+    // Returns the matching incident, or null if the ID doesn't exist.
+    public Incident? GetIncidentById(int id)
+    {
+        foreach (var incident in _incidents)
+        {
+            if (incident.Id == id)
+            {
+                return incident;
+            }
+        }
+    
+    // We checked every incident without finding a match.
+    return null;
     }
 }
