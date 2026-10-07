@@ -93,3 +93,16 @@ else
 {
     Console.WriteLine($"Selected case #{selectedIncident.Id}: " + selectedIncident.Description);
 }
+
+
+// Temporary sample to check our rescue unit model.
+var patrolUnit = new RescueUnit
+{
+    Name = "Patrol-01",
+    Type = UnitType.SmallPatrolBoat,
+    Status = UnitStatus.Available,
+    Latitude = 59.03,
+    Longitude = 9.72
+};
+
+Console.WriteLine($"{patrolUnit.Name} - {patrolUnit.Type} [{patrolUnit.Status}]");
