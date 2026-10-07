@@ -5,6 +5,9 @@ namespace MaritimeCommand.Services;
 // Handles the rules for registering incidents.
 public class IncidentService
 {
+    // The next ID available for a successful registration.
+    private int _nextIncidentId = 1;
+
     public Incident RegisterIncident(
         IncidentType type,
         string description,
@@ -38,6 +41,7 @@ public class IncidentService
         // Finally, reaching this point means every validation check has passed.
         return new Incident
         {
+            Id = _nextIncidentId++,
             Type = type,
             Status = IncidentStatus.Reported,
             Description = description.Trim(),
