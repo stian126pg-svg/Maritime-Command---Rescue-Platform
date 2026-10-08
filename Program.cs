@@ -94,15 +94,36 @@ else
     Console.WriteLine($"Selected case #{selectedIncident.Id}: " + selectedIncident.Description);
 }
 
+// One service instance holds our fleet and its ID counter.
+var rescueUnitService = new RescueUnitService();
 
-// Temporary sample to check our rescue unit model.
-var patrolUnit = new RescueUnit
+try
 {
-    Name = "Patrol-01",
-    Type = UnitType.SmallPatrolBoat,
-    Status = UnitStatus.Available,
-    Latitude = 59.03,
-    Longitude = 9.72
-};
+    rescueUnitService.RegisterUnit(
+        "Patrol One",
+        UnitType.SmallPatrolBoat,
+        59.03,
+        9.72);
 
-Console.WriteLine($"{patrolUnit.Name} - {patrolUnit.Type} [{patrolUnit.Status}]");
+    rescueUnitService.RegisterUnit(
+        "Rescue Helicopter One",
+        UnitType.Helicopter,
+        59.10,
+        9.80);
+}
+
+catch (ArgumentException error)
+{
+    Console.WriteLine(error.Message);
+    return;
+}
+
+// Display the units stored by the service.
+Console.WriteLine();
+Console.WriteLine("RESCUE UNITS");
+
+foreach (var unit in rescueUnitService.GetUnits())
+{
+    Console.WriteLine($"{unit.Id} - {unit.Name}: {unit.Type} [{unit.Status}]");
+}
+
