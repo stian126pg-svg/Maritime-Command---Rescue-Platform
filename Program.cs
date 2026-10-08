@@ -127,3 +127,34 @@ foreach (var unit in rescueUnitService.GetUnits())
     Console.WriteLine($"{unit.Id} - {unit.Name}: {unit.Type} [{unit.Status}]");
 }
 
+// Connect dispatch to the services we've already populated.
+var dispatchService = new DispatchService(incidentService, rescueUnitService);
+
+try
+{
+    // Send unit #1 to incident #1
+    var assignment = dispatchService.AssignUnit(1, 1);
+
+    Console.WriteLine();
+    Console.WriteLine($"Dispatch #{assignment.Id}: unit #{assignment.UnitId} " + $"assigned to incident #{assignment.IncidentId}");
+
+    // Look up the objects again to see their updated states.
+    var dispatchedIncident = incidentService.GetIncidentById(assignment.IncidentId);
+
+    var dispatchedUnit = rescueUnitService.GetUnitById(assignment.UnitId);
+
+    if (dispatchedIncident is not null && dispatchedUnit is not null)
+    {
+        Console.WriteLine($"Incident status: {dispatchedIncident.Status}");
+        Console.WriteLine($"Unit status: {dispatchedUnit.Status}");
+    }
+}
+
+catch (ArgumentException error)
+{
+    Console.WriteLine(error.Message);
+}
+catch (InvalidOperationException error)
+{
+    Console.WriteLine(error.Message);
+}
