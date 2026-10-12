@@ -74,6 +74,65 @@ public class DispatchService
         return assignment;
     }
 
+    // Records the arrival for an active assignment.
+    public Assignment RecordArrival(int assignmentId)
+    {
+        // Find the assignment we want to update.
+        Assignment? selectedAssignment = null;
+
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.Id == assignmentId)
+            {
+                selectedAssignment = assignment;
+                break;
+            }
+        }
+
+        if (selectedAssignment is null)
+        {
+            throw new ArgumentException("Assignment not found.");
+        }
+
+        if (selectedAssignment.EndedAt is not null)
+        {
+            throw new InvalidOperationException("Cannot record arrival for an ended assignment.");
+        }
+
+        if (selectedAssignment.ArrivedAt is not null)
+        {
+            throw new InvalidOperationException("Arrival has already been recorded.");
+        }
+
+        // Find the incident and unit connected to this assignment.
+        var incident = _incidentService.GetIncidentById(selectedAssignment.IncidentId);
+
+        var unit = _rescueUnitService.GetUnitById(selectedAssignment.UnitId);
+
+        if (incident is null || unit is null)
+        {
+            throw new InvalidOperationException("The assignment's incident or unit could not be found.");
+        }
+
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            throw new InvalidOperationException("Cannot record arrival at a concluded incident.");
+        }
+
+        if (unit.Status != UnitStatus.Assigned)
+        {
+            throw new InvalidOperationException("The unit must be assigned before recording arrival");
+        }
+
+        // All checks passed. Record the time and update the unit's position.
+        selectedAssignment.ArrivedAt = DateTimeOffset.UtcNow;
+
+        unit.Latitude = incident.Latitude;
+        unit.Longitude = incident.Longitude;
+
+        return selectedAssignment;
+    }
+
     public IReadOnlyList<Assignment> GetAssignments()
     {
         return _assignments.AsReadOnly();

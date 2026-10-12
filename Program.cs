@@ -148,6 +148,12 @@ try
         Console.WriteLine($"Incident status: {dispatchedIncident.Status}");
         Console.WriteLine($"Unit status: {dispatchedUnit.Status}");
     }
+
+    // Record Arrival for the assignment we just created.
+    var arrivedAssignment = dispatchService.RecordArrival(assignment.Id);
+
+    Console.WriteLine($"Unit #{arrivedAssignment.UnitId} arrived at incident " + 
+    $"#{arrivedAssignment.IncidentId} at " + $"{arrivedAssignment.ArrivedAt:HH:mm:ss} UTC.");
 }
 
 catch (ArgumentException error)

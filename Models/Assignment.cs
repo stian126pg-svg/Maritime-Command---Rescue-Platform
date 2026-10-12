@@ -9,5 +9,6 @@ public class Assignment
     public DateTimeOffset AssignedAt { get; set; }
 
     // Null means the assignment hasn't ended/concluded.
+    public DateTimeOffset? ArrivedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }
 }
