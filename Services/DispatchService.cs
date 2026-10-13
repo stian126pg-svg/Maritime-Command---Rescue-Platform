@@ -9,8 +9,11 @@ public class DispatchService
     private readonly RescueUnitService _rescueUnitService;
 
     private readonly List<Assignment> _assignments = new();
-
     private int _nextAssignmentId = 1;
+
+    private readonly List<OperationalLogEntry> _logEntries = new();
+    private int _nextLogEntryId = 1;
+
 
     // Receive the services that already hold our incidents and units.
     public DispatchService(IncidentService incidentService, RescueUnitService rescueUnitService)
@@ -71,6 +74,9 @@ public class DispatchService
         unit.Status = UnitStatus.Assigned;
         incident.Status = IncidentStatus.Ongoing;
 
+        // Capture the unit's departure position and dispatch time.
+        RecordLogEntry(incident, unit, assignment.AssignedAt, $"{unit.Name} dispatched to incident #{incident.Id}.");
+
         return assignment;
     }
 
@@ -124,11 +130,16 @@ public class DispatchService
             throw new InvalidOperationException("The unit must be assigned before recording arrival");
         }
 
-        // All checks passed. Record the time and update the unit's position.
-        selectedAssignment.ArrivedAt = DateTimeOffset.UtcNow;
+        // Use one timestamp for both the assignment and its log entry.
+        var arrivalTime = DateTimeOffset.UtcNow;
+
+        selectedAssignment.ArrivedAt = arrivalTime;
 
         unit.Latitude = incident.Latitude;
         unit.Longitude = incident.Longitude;
+
+        // Capture the unit's position after arrival.
+        RecordLogEntry(incident, unit, arrivalTime, $"{unit.Name} arrived at incident #{incident.Id}.");
 
         return selectedAssignment;
     }
@@ -136,5 +147,43 @@ public class DispatchService
     public IReadOnlyList<Assignment> GetAssignments()
     {
         return _assignments.AsReadOnly();
+    }
+
+    // Used internally after a successful operational action.
+    private void RecordLogEntry(Incident incident, RescueUnit rescueUnit, DateTimeOffset timestamp, string message)
+    {
+        var entry = new OperationalLogEntry
+        {
+            Id = _nextLogEntryId++,
+            IncidentId = incident.Id,
+            UnitId = rescueUnit.Id,
+            Timestamp = timestamp,
+            Latitude = rescueUnit.Latitude,
+            Longitude = rescueUnit.Longitude,
+            Message = message
+        };
+
+        _logEntries.Add(entry);
+    }
+    
+    // Returns entries for one incident in their recorded order.
+    public IReadOnlyList<OperationalLogEntry> GetIncidentLog(int incidentId)
+    {
+        if (_incidentService.GetIncidentById(incidentId) is null)
+        {
+            throw new ArgumentException("Incident not found.");
+        }
+
+        var incidentEntries = new List<OperationalLogEntry>();
+
+        foreach (var entry in _logEntries)
+        {
+            if (entry.IncidentId == incidentId)
+            {
+                incidentEntries.Add(entry);
+            }
+        }
+
+        return incidentEntries.AsReadOnly();
     }
 }
