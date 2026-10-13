@@ -144,6 +144,61 @@ public class DispatchService
         return selectedAssignment;
     }
 
+    // Adds a situation report from a unit assigned to this incident.
+    public void AddSituationReport(int incidentId, int unitId, string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            throw new ArgumentException("Please provide a report message.");
+        }
+
+        var incident = _incidentService.GetIncidentById(incidentId);
+
+        if (incident is null)
+        {
+            throw new ArgumentException("Incident not found.");
+        }
+
+        var unit = _rescueUnitService.GetUnitById(unitId);
+
+        if (unit is null)
+        {
+            throw new ArgumentException("Rescue Unit not found.");
+        }
+
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            throw new InvalidOperationException("Cannot add a situation report to a concluded incident.");
+        }
+
+        // The Unit must have an active assignment to this particular case.
+        bool hasActiveAssignment = false;
+
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.IncidentId == incidentId &&
+                assignment.UnitId == unitId &&
+                assignment.EndedAt is null)
+            {
+                hasActiveAssignment = true;
+                break;
+            }
+        }
+
+        if (!hasActiveAssignment)
+        {
+            throw new InvalidOperationException("This Unit has no active assignment to this incident.");
+        }
+
+        if (unit.Status != UnitStatus.Assigned)
+        {
+            throw new InvalidOperationException("The reporting Unit must be assigned.");
+        }
+
+        // All checks passed? Store the report using the existing helper.
+        RecordLogEntry(incident, unit, DateTimeOffset.UtcNow, $"{unit.Name} reports: {message.Trim()}");
+    }
+
     public IReadOnlyList<Assignment> GetAssignments()
     {
         return _assignments.AsReadOnly();

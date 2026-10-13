@@ -154,6 +154,23 @@ try
 
     Console.WriteLine($"Unit #{arrivedAssignment.UnitId} arrived at incident " + 
     $"#{arrivedAssignment.IncidentId} at " + $"{arrivedAssignment.ArrivedAt:HH:mm:ss} UTC.");
+
+    // Record a situation update before displaying the incident's log.
+    dispatchService.AddSituationReport(
+    assignment.IncidentId,
+    assignment.UnitId,
+    "Fire confirmed aboard vessel. Requesting firefighting backup.");
+
+    Console.WriteLine();
+    Console.WriteLine($"OPERATIONAL LOG — INCIDENT #{assignment.IncidentId}");
+
+    foreach (var entry in dispatchService.GetIncidentLog(assignment.IncidentId))
+    {
+        Console.WriteLine(
+            $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] " +
+            $"{entry.Message} " +
+            $"Position: {entry.Latitude}, {entry.Longitude}");
+    }
 }
 
 catch (ArgumentException error)
