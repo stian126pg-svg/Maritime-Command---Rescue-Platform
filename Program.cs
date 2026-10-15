@@ -188,6 +188,16 @@ try
             $"{entry.Message} " +
             $"Position: {entry.Latitude}, {entry.Longitude}");
     }
+
+    // Demonstration: the unit still needs servicing.
+    var assessedUnit = dispatchService.AssessUnitReadiness(assignment.UnitId, readyForDispatch: false);
+
+    Console.WriteLine($"Readiness assessment: {assessedUnit.Status}");
+
+    // Demonstration: servicing is now complete and readiness is confirmed.
+    assessedUnit = dispatchService.AssessUnitReadiness(assignment.UnitId, readyForDispatch: true);
+
+    Console.WriteLine($"After servicing: {assessedUnit.Status}");
 }
 
 catch (ArgumentException error)

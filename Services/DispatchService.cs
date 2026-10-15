@@ -1,5 +1,4 @@
 using MaritimeCommand.Models;
-using Microsoft.VisualBasic;
 
 namespace MaritimeCommand.Services;
 
@@ -248,6 +247,7 @@ public class DispatchService
         }
     }
 
+
     // All checks passed? Use one timestamp for the conclusion.
     var concludedAt = DateTimeOffset.UtcNow;
 
@@ -272,6 +272,44 @@ public class DispatchService
     RecordLogEntry(incident, null, concludedAt, $"Incident concluded: {conclusion.Trim()} Awaiting detailed report.");
 
         return incident;
+    }
+
+    // Records the operator's assessment of a unit's readiness.
+    public RescueUnit AssessUnitReadiness(int unitId, bool readyForDispatch)
+    {
+        var unit = _rescueUnitService.GetUnitById(unitId);
+
+        if (unit is null)
+        {
+            throw new ArgumentException("Rescue unit not found");
+        }
+
+        // A readiness assessment must not interrupt an active assignment.
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.UnitId == unitId && assignment.EndedAt is null)
+            {
+                throw new InvalidOperationException("Cannot change readiness while the unit has an active assignment.");
+            }
+        }
+
+        // Also guard against an inconsistent Assigned status.
+        if (unit.Status == UnitStatus.Assigned)
+        {
+            throw new InvalidOperationException("The unit is still marked as assigned.");
+        }
+
+        if (readyForDispatch)
+        {
+            unit.Status = UnitStatus.Available;
+        }
+
+        else
+        {
+            unit.Status = UnitStatus.Unavailable;
+        }
+
+        return unit;
     }
 
     public IReadOnlyList<Assignment> GetAssignments()
