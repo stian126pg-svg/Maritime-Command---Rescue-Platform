@@ -11,4 +11,7 @@ public class Incident
     public double Longitude { get; set; }
     public DateTimeOffset ReportedAt { get; set; }
     public IncidentStatus Status { get; set; }
+    
+    // Empty until the incident is concluded.
+    public DateTimeOffset? ConcludedAt { get; set; }
 }

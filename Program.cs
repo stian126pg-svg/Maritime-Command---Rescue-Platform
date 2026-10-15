@@ -161,6 +161,23 @@ try
     assignment.UnitId,
     "Fire confirmed aboard vessel. Requesting firefighting backup.");
 
+    // Demonstration: the response has finished and handover is complete.
+    var concludedIncident = dispatchService.ConcludeIncident(
+        assignment.IncidentId, 
+        "Fire extinguished. Personnel handed over to shore emergency services.", 
+        responseAndHandoversComplete: true);
+
+    Console.WriteLine($"Final incident status: {concludedIncident.Status}");
+
+    var returningUnit = rescueUnitService.GetUnitById(assignment.UnitId);
+
+    if (returningUnit is not null)
+    {
+        Console.WriteLine($"Unit status after conclusion: {returningUnit.Status}");
+    }
+
+    Console.WriteLine($"Assignment ended: {assignment.EndedAt is not null}");
+
     Console.WriteLine();
     Console.WriteLine($"OPERATIONAL LOG — INCIDENT #{assignment.IncidentId}");
 

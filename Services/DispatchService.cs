@@ -1,4 +1,5 @@
 using MaritimeCommand.Models;
+using Microsoft.VisualBasic;
 
 namespace MaritimeCommand.Services;
 
@@ -176,9 +177,7 @@ public class DispatchService
 
         foreach (var assignment in _assignments)
         {
-            if (assignment.IncidentId == incidentId &&
-                assignment.UnitId == unitId &&
-                assignment.EndedAt is null)
+            if (assignment.IncidentId == incidentId && assignment.UnitId == unitId && assignment.EndedAt is null)
             {
                 hasActiveAssignment = true;
                 break;
@@ -199,22 +198,98 @@ public class DispatchService
         RecordLogEntry(incident, unit, DateTimeOffset.UtcNow, $"{unit.Name} reports: {message.Trim()}");
     }
 
+    // Concludes a case after the operator confirms the response is complete.
+    public Incident ConcludeIncident(int incidentId, string conclusion, bool responseAndHandoversComplete)
+    {
+        var incident = _incidentService.GetIncidentById(incidentId);
+
+        if (incident is null)
+        {
+            throw new ArgumentException("Incident not found.");
+        }
+
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            throw new InvalidOperationException("This incident is already concluded.");
+        }
+
+        if (string.IsNullOrWhiteSpace(conclusion))
+        {
+            throw new ArgumentException("Please provide a conclusion.");
+        }
+
+        if (!responseAndHandoversComplete)
+        {
+            throw new InvalidOperationException("Please confirm that assistance and necessary handovers are complete.");
+        }
+
+        // Gather and check everything before changing any operational state.
+        var activeAssignments = new List<Assignment>();
+        var returningUnits = new List<RescueUnit>();
+
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.IncidentId == incidentId && assignment.EndedAt is null)
+            {
+                var unit = _rescueUnitService.GetUnitById(assignment.UnitId);
+
+                if (unit is null)
+                {
+                    throw new InvalidOperationException("An assigned rescue unit could not be found.");
+                }
+
+                if (unit.Status != UnitStatus.Assigned)
+                {
+                    throw new InvalidOperationException("An assigned unit has an inconsistent status.");
+                }
+
+            activeAssignments.Add(assignment);
+            returningUnits.Add(unit);
+        }
+    }
+
+    // All checks passed? Use one timestamp for the conclusion.
+    var concludedAt = DateTimeOffset.UtcNow;
+
+    incident.Status = IncidentStatus.Concluded;
+    incident.ConcludedAt = concludedAt;
+
+    // Preserve assignment records, but mark them as ended.
+    foreach (var assignment in activeAssignments)
+    {
+        assignment.EndedAt = concludedAt;
+    }
+
+    // Returning does not mean ready for another dispatch.
+    foreach (var unit in returningUnits)
+    {
+        unit.Status = UnitStatus.Returning;
+
+        RecordLogEntry(incident, unit, concludedAt, $"{unit.Name} released from incident; returning to HQ.");
+    }
+
+    // No specific unit: use the incident's coordinates.
+    RecordLogEntry(incident, null, concludedAt, $"Incident concluded: {conclusion.Trim()} Awaiting detailed report.");
+
+        return incident;
+    }
+
     public IReadOnlyList<Assignment> GetAssignments()
     {
         return _assignments.AsReadOnly();
     }
 
-    // Used internally after a successful operational action.
-    private void RecordLogEntry(Incident incident, RescueUnit rescueUnit, DateTimeOffset timestamp, string message)
+    // Records and event, optionally connected to specific unit.
+    private void RecordLogEntry(Incident incident, RescueUnit? rescueUnit, DateTimeOffset timestamp, string message)
     {
         var entry = new OperationalLogEntry
         {
             Id = _nextLogEntryId++,
             IncidentId = incident.Id,
-            UnitId = rescueUnit.Id,
+            UnitId = rescueUnit?.Id,
             Timestamp = timestamp,
-            Latitude = rescueUnit.Latitude,
-            Longitude = rescueUnit.Longitude,
+            Latitude = rescueUnit?.Latitude ?? incident.Latitude,
+            Longitude = rescueUnit?.Longitude ?? incident.Longitude,
             Message = message
         };
 
