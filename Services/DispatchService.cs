@@ -312,6 +312,103 @@ public class DispatchService
         return unit;
     }
 
+    // Redirects an actively assigned unit to another open incident.
+    public Assignment ReassignUnit(int unitId, int targetIncidentId, bool readinessConfirmed)
+    {
+        var unit = _rescueUnitService.GetUnitById(unitId);
+
+        if (unit is null)
+        {
+            throw new ArgumentException("Rescue unit not found.");
+        }
+
+        var targetIncident = _incidentService.GetIncidentById(targetIncidentId);
+
+        if (targetIncident is null)
+        {
+            throw new ArgumentException("Target incident not found.");
+        }
+
+        if (targetIncident.Status == IncidentStatus.Concluded)
+        {
+            throw new InvalidOperationException("Cannot reassign to a concluded incident.");
+        }
+
+        if (!readinessConfirmed)
+        {
+            throw new InvalidOperationException("Confirm the unit is ready for another incident.");
+        }
+
+        if (unit.Status != UnitStatus.Assigned)
+        {
+            throw new InvalidOperationException("The unit must be assigned before direct reassignment");
+        }
+
+        Assignment? currentAssignment = null;
+
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.UnitId == unitId && assignment.EndedAt is null)
+            {
+                // Guard against inconsistent assignment records.
+                if (currentAssignment is not null)
+                {
+                    throw new InvalidOperationException("The unit has multiple active assignments.");
+                }
+
+                currentAssignment = assignment;
+            }
+        }
+
+        if (currentAssignment is null)
+        {
+            throw new InvalidOperationException("The unit has no active assignment.");
+        }
+
+        if (currentAssignment.IncidentId == targetIncidentId)
+        {
+            throw new InvalidOperationException("The unit is already assigned to this incident.");
+        }
+
+        var previousIncident = _incidentService.GetIncidentById(currentAssignment.IncidentId);
+
+        if (previousIncident is null || previousIncident.Status != IncidentStatus.Ongoing)
+        {
+            throw new InvalidOperationException("The current assignment must belong to an ongoing incident.");
+        }
+
+        // All checks passed? End the old assignment and start the new one.
+        var reassignedAt = DateTimeOffset.UtcNow;
+
+        var newAssignment = new Assignment
+        {
+            Id = _nextAssignmentId++,
+            IncidentId = targetIncident.Id,
+            UnitId = unit.Id,
+            AssignedAt = reassignedAt
+        };
+
+        currentAssignment.EndedAt = reassignedAt;
+        _assignments.Add(newAssignment);
+
+        targetIncident.Status = IncidentStatus.Ongoing;
+
+        // The unit remains Assigned, at its current position.
+        RecordLogEntry(
+            previousIncident,
+            unit,
+            reassignedAt,
+            $"{unit.Name} redirected to incident #{targetIncident.Id}.");
+
+        RecordLogEntry(
+            targetIncident,
+            unit,
+            reassignedAt,
+            $"{unit.Name} dispatched from incident #{previousIncident.Id}.");
+
+        return newAssignment;
+    }
+
     public IReadOnlyList<Assignment> GetAssignments()
     {
         return _assignments.AsReadOnly();

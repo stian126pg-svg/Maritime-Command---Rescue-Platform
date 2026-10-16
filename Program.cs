@@ -34,6 +34,17 @@ Operational Log Entry
  ├── Coordinates
  ├── Rescue Unit
  └── Message
+
+
+TO DO:
+- Interactive console — choose actions and enter incident/unit IDs.
+- Core checks — verify reassignment, conclusion, and readiness rules, including rejected actions.
+- Persistence — save incidents, units, assignments, and logs across restarts.
+- Web API — expose our existing service methods through controllers and DTOs.
+- Operator dashboard — display cases, fleet availability, assignments, and logs; connect action buttons.
+- Operator login(?) — identify operators and protect access.
+- V1(?) finish — check the complete workflow, tidy the interface, and finish README + Setup.
+
  */
 
 
@@ -204,6 +215,51 @@ catch (ArgumentException error)
 {
     Console.WriteLine(error.Message);
 }
+catch (InvalidOperationException error)
+{
+    Console.WriteLine(error.Message);
+}
+
+try
+{
+    // Create another case for our reassignment demonstration.
+    var searchIncident = incidentService.RegisterIncident(
+        IncidentType.SearchAndRescue,
+        "Person reported missing near the harbour.",
+        59.05,
+        9.75);
+
+    // Send the helicopter to the existing medical emergency incident first.
+    var originalAssignment = dispatchService.AssignUnit(
+        anotherRegisteredIncident.Id,
+        2);
+
+    // The operator confirms it can be redirected to the search.
+    var redirectedAssignment = dispatchService.ReassignUnit(
+        originalAssignment.UnitId,
+        searchIncident.Id,
+        readinessConfirmed: true);
+
+    Console.WriteLine();
+    Console.WriteLine(
+        $"Previous assignment ended: " + 
+        $"{originalAssignment.EndedAt is not null}");
+
+    Console.WriteLine($"Previous incident status: {anotherRegisteredIncident.Status}");
+
+    Console.WriteLine(
+        $"New assignment #{redirectedAssignment.Id} " + 
+        $"unit #{redirectedAssignment.UnitId} to " + 
+        $"incident #{redirectedAssignment.IncidentId}");
+
+    Console.WriteLine($"New incident status: {searchIncident.Status}");
+}
+
+catch (ArgumentException error)
+{
+    Console.WriteLine(error.Message);
+}
+
 catch (InvalidOperationException error)
 {
     Console.WriteLine(error.Message);
