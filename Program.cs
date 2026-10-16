@@ -48,219 +48,177 @@ TO DO:
  */
 
 
-// Create the service that knows our registration rules.
+// Create each service once, so its collections survive between menu choices.
 var incidentService = new IncidentService();
-
-// Declared outside 'try' so we can use both incidents afterwards.
-Incident registeredIncident;
-Incident anotherRegisteredIncident;
-
-try
-{
-    // Already assigned to the variable we declared above.
-    // First registration uses ID 1.
-    registeredIncident = incidentService.RegisterIncident(
-        IncidentType.Fire,
-        "Smoke?",
-        90,
-        180);
-
-    // The same service remembers the counter and uses ID 2.
-    anotherRegisteredIncident = incidentService.RegisterIncident(
-        IncidentType.MedicalEmergency,
-        "Passenger requires medical assistance.",
-        59.03,
-        9.72);
-
-    Console.WriteLine("Validation passed.");
-
-    Console.WriteLine($"Generated IDs: {registeredIncident.Id}, {anotherRegisteredIncident.Id}");
-}
-
-catch (ArgumentException error)
-{
-    Console.WriteLine(error.Message);
-    return;
-}
-
-// Ask the service for the incidents it has registered.
-var incidents = incidentService.GetIncidents();
-
-foreach (var currentIncident in incidents)
-{   
-    Console.WriteLine(
-        $"#{currentIncident.Id} - {currentIncident.Type} " +
-        $"[{currentIncident.Status}]: {currentIncident.Description}");
-}
-
-// Look up one particular case/incident once.
-var selectedIncident = incidentService.GetIncidentById(2);
-
-if (selectedIncident is null)
-{
-    Console.WriteLine("Incident not found");
-}
-else
-{
-    Console.WriteLine($"Selected case #{selectedIncident.Id}: " + selectedIncident.Description);
-}
-
-// One service instance holds our fleet and its ID counter.
 var rescueUnitService = new RescueUnitService();
-
-try
-{
-    rescueUnitService.RegisterUnit(
-        "Patrol One",
-        UnitType.SmallPatrolBoat,
-        59.03,
-        9.72);
-
-    rescueUnitService.RegisterUnit(
-        "Rescue Helicopter One",
-        UnitType.Helicopter,
-        59.10,
-        9.80);
-}
-
-catch (ArgumentException error)
-{
-    Console.WriteLine(error.Message);
-    return;
-}
-
-// Display the units stored by the service.
-Console.WriteLine();
-Console.WriteLine("RESCUE UNITS");
-
-foreach (var unit in rescueUnitService.GetUnits())
-{
-    Console.WriteLine($"{unit.Id} - {unit.Name}: {unit.Type} [{unit.Status}]");
-}
-
-// Connect dispatch to the services we've already populated.
 var dispatchService = new DispatchService(incidentService, rescueUnitService);
 
-try
+// Temporary starting data so we have something to view.
+// No dispatch, arrival or conclusion happens automatically.
+incidentService.RegisterIncident(
+    IncidentType.Fire,
+    "Smoke reported aboard a fishing vessel.",
+    59.03,
+    9.72);
+
+rescueUnitService.RegisterUnit(
+    "Patrol One",
+    UnitType.SmallPatrolBoat,
+    59.03,
+    9.72);
+
+rescueUnitService.RegisterUnit(
+    "Rescue Helicopter One",
+    UnitType.Helicopter,
+    59.10,
+    9.80);
+
+// Keep showing the menu until the operator chooses to exit.
+bool running = true;
+
+while (running)
 {
-    // Send unit #1 to incident #1
-    var assignment = dispatchService.AssignUnit(1, 1);
-
     Console.WriteLine();
-    Console.WriteLine($"Dispatch #{assignment.Id}: unit #{assignment.UnitId} " + $"assigned to incident #{assignment.IncidentId}");
+    Console.WriteLine("MARITIME COMMAND & RESCUE");
+    Console.WriteLine("1. List incidents");
+    Console.WriteLine("2. List rescue units");
+    Console.WriteLine("3. Register incident");
+    Console.WriteLine("0. Exit");
+    Console.Write("Choose an option: ");
 
-    // Look up the objects again to see their updated states.
-    var dispatchedIncident = incidentService.GetIncidentById(assignment.IncidentId);
+    string? choice = Console.ReadLine();
 
-    var dispatchedUnit = rescueUnitService.GetUnitById(assignment.UnitId);
-
-    if (dispatchedIncident is not null && dispatchedUnit is not null)
+    // End cleanly if the input stream closes.
+    if (choice is null)
     {
-        Console.WriteLine($"Incident status: {dispatchedIncident.Status}");
-        Console.WriteLine($"Unit status: {dispatchedUnit.Status}");
+        break;
     }
 
-    // Record Arrival for the assignment we just created.
-    var arrivedAssignment = dispatchService.RecordArrival(assignment.Id);
-
-    Console.WriteLine($"Unit #{arrivedAssignment.UnitId} arrived at incident " + 
-    $"#{arrivedAssignment.IncidentId} at " + $"{arrivedAssignment.ArrivedAt:HH:mm:ss} UTC.");
-
-    // Record a situation update before displaying the incident's log.
-    dispatchService.AddSituationReport(
-    assignment.IncidentId,
-    assignment.UnitId,
-    "Fire confirmed aboard vessel. Requesting firefighting backup.");
-
-    // Demonstration: the response has finished and handover is complete.
-    var concludedIncident = dispatchService.ConcludeIncident(
-        assignment.IncidentId, 
-        "Fire extinguished. Personnel handed over to shore emergency services.", 
-        responseAndHandoversComplete: true);
-
-    Console.WriteLine($"Final incident status: {concludedIncident.Status}");
-
-    var returningUnit = rescueUnitService.GetUnitById(assignment.UnitId);
-
-    if (returningUnit is not null)
+    switch (choice.Trim())
     {
-        Console.WriteLine($"Unit status after conclusion: {returningUnit.Status}");
+        case "1":
+        {
+            Console.WriteLine();
+            Console.WriteLine("INCIDENTS");
+
+            var incidents = incidentService.GetIncidents();
+
+            if (incidents.Count == 0)
+            {
+                Console.WriteLine("No incidents registered.");
+            }
+
+            foreach (var incident in incidents)
+            {
+                Console.WriteLine(
+                    $"#{incident.Id} - {incident.Type} " +
+                    $"[{incident.Status}]: {incident.Description}");
+            }
+
+            break;
+        }
+
+        case "2":
+        {
+            Console.WriteLine();
+            Console.WriteLine("RESCUE UNITS");
+
+            var units = rescueUnitService.GetUnits();
+
+            if (units.Count == 0)
+            {
+                Console.WriteLine("No rescue units registered.");
+            }
+
+            foreach (var unit in units)
+            {
+                Console.WriteLine(
+                    $"#{unit.Id} - {unit.Name}: " +
+                    $"{unit.Type} [{unit.Status}]");
+            }
+
+            break;
+        }
+
+        case "3":
+        {
+            Console.WriteLine();
+            Console.WriteLine("REGISTER INCIDENT");
+
+            // Display the categories the operator can choose from.
+            var incidentTypes = Enum.GetValues<IncidentType>();
+
+            for (int index = 0; index < incidentTypes.Length; index++)
+                {
+                    Console.WriteLine($"{index + 1}. {incidentTypes[index]}");
+                }
+            
+            Console.Write("Select incident type: ");
+
+            // Convert the entered text into a number and check the menu range.
+            if (!int.TryParse(Console.ReadLine(), out int typeChoice) ||
+                typeChoice < 1 ||
+                typeChoice > incidentTypes.Length)
+                {
+                    Console.WriteLine("Please select one of the listed incident types.");
+                    break;
+                }
+            
+            // Menu numbers start at 1; array positions start at 0.
+            IncidentType selectedType = incidentTypes[typeChoice - 1];
+
+            Console.Write("Description: ");
+            string description = Console.ReadLine() ?? "";
+
+            Console.Write("Latitude (use your local decimal seperator): ");
+
+            if (!double.TryParse(Console.ReadLine(), out double latitude))
+                {
+                    Console.WriteLine("Please enter a numerical latitude.");
+                    break;
+                }
+            
+            Console.Write("Longitude (use your local decimal seperator): ");
+            
+            if (!double.TryParse(Console.ReadLine(), out double longitude))
+                {
+                    Console.WriteLine("Please enter a numerical longitude.");
+                    break;
+                }
+
+            try
+            {
+                // The service still enforces our registration values.
+                var incident = incidentService.RegisterIncident(
+                    selectedType,
+                    description,
+                    latitude,
+                    longitude);
+
+                Console.WriteLine(
+                    $"Incident #{incident.Id} registered: " +
+                    $"{incident.Type} [{incident.Status}].");
+            }
+
+            catch (ArgumentException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
+
+            break;    
+        }
+
+        case "0":
+        {
+            running = false;
+            Console.WriteLine("Command console closed.");
+            break;
+        }
+
+        default:
+        {
+            Console.WriteLine("Please select one of the menu options.");
+            break;
+        }
     }
-
-    Console.WriteLine($"Assignment ended: {assignment.EndedAt is not null}");
-
-    Console.WriteLine();
-    Console.WriteLine($"OPERATIONAL LOG — INCIDENT #{assignment.IncidentId}");
-
-    foreach (var entry in dispatchService.GetIncidentLog(assignment.IncidentId))
-    {
-        Console.WriteLine(
-            $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] " +
-            $"{entry.Message} " +
-            $"Position: {entry.Latitude}, {entry.Longitude}");
-    }
-
-    // Demonstration: the unit still needs servicing.
-    var assessedUnit = dispatchService.AssessUnitReadiness(assignment.UnitId, readyForDispatch: false);
-
-    Console.WriteLine($"Readiness assessment: {assessedUnit.Status}");
-
-    // Demonstration: servicing is now complete and readiness is confirmed.
-    assessedUnit = dispatchService.AssessUnitReadiness(assignment.UnitId, readyForDispatch: true);
-
-    Console.WriteLine($"After servicing: {assessedUnit.Status}");
-}
-
-catch (ArgumentException error)
-{
-    Console.WriteLine(error.Message);
-}
-catch (InvalidOperationException error)
-{
-    Console.WriteLine(error.Message);
-}
-
-try
-{
-    // Create another case for our reassignment demonstration.
-    var searchIncident = incidentService.RegisterIncident(
-        IncidentType.SearchAndRescue,
-        "Person reported missing near the harbour.",
-        59.05,
-        9.75);
-
-    // Send the helicopter to the existing medical emergency incident first.
-    var originalAssignment = dispatchService.AssignUnit(
-        anotherRegisteredIncident.Id,
-        2);
-
-    // The operator confirms it can be redirected to the search.
-    var redirectedAssignment = dispatchService.ReassignUnit(
-        originalAssignment.UnitId,
-        searchIncident.Id,
-        readinessConfirmed: true);
-
-    Console.WriteLine();
-    Console.WriteLine(
-        $"Previous assignment ended: " + 
-        $"{originalAssignment.EndedAt is not null}");
-
-    Console.WriteLine($"Previous incident status: {anotherRegisteredIncident.Status}");
-
-    Console.WriteLine(
-        $"New assignment #{redirectedAssignment.Id} " + 
-        $"unit #{redirectedAssignment.UnitId} to " + 
-        $"incident #{redirectedAssignment.IncidentId}");
-
-    Console.WriteLine($"New incident status: {searchIncident.Status}");
-}
-
-catch (ArgumentException error)
-{
-    Console.WriteLine(error.Message);
-}
-
-catch (InvalidOperationException error)
-{
-    Console.WriteLine(error.Message);
 }
