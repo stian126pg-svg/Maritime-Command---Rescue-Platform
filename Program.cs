@@ -86,6 +86,8 @@ while (running)
     Console.WriteLine("4. Dispatch rescue unit");
     Console.WriteLine("5. List assignments");
     Console.WriteLine("6. Record unit arrival");
+    Console.WriteLine("7. Add situation report");
+    Console.WriteLine("8. View incident log");
     Console.WriteLine("0. Exit");
     Console.Write("Choose an option: ");
 
@@ -256,42 +258,42 @@ while (running)
 
         case "5":
         {
-             Console.WriteLine();
-             Console.WriteLine("ASSIGNMENTS");
+            Console.WriteLine();
+            Console.WriteLine("ASSIGNMENTS");
 
-             var assignments = dispatchService.GetAssignments();
+            var assignments = dispatchService.GetAssignments();
 
-             if (assignments.Count == 0)
-                {
-                    Console.WriteLine("No assignments recorded.");
-                }
+            if (assignments.Count == 0)
+            {
+                Console.WriteLine("No assignments recorded.");
+            }
 
             foreach (var assignment in assignments)
+            {
+                // Work out which stage this assignment has reached.
+                string progress;
+
+                if (assignment.EndedAt is not null)
                 {
-                    // Work out which stage this assignment has reached.
-                    string progress;
-
-                    if (assignment.EndedAt is not null)
-                    {
-                        progress = "Ended.";
-                    }
-
-                    else if (assignment.ArrivedAt is not null)
-                    {
-                        progress = "On scene.";
-                    }
-
-                    else
-                    {
-                        progress = "En route.";
-                    }
-
-                    Console.WriteLine($"Assignment #{assignment.Id}: " +
-                        $"unit #{assignment.UnitId} → " +
-                        $"incident #{assignment.IncidentId} [{progress}]");
+                    progress = "Ended.";
                 }
 
-                break;
+                else if (assignment.ArrivedAt is not null)
+                {
+                    progress = "On scene.";
+                }
+
+                else
+                {
+                    progress = "En route.";
+                }
+
+                Console.WriteLine($"Assignment #{assignment.Id}: " +
+                    $"unit #{assignment.UnitId} → " +
+                    $"incident #{assignment.IncidentId} [{progress}]");
+            }
+
+            break;
         }
 
         case "6":
@@ -299,7 +301,7 @@ while (running)
             Console.WriteLine();
             Console.WriteLine("RECORD ARRIVAL");
 
-            Console.WriteLine("Assignment ID: ");
+            Console.Write("Assignment ID: ");
 
             if (!int.TryParse(Console.ReadLine(), out int assignmentId))
                 {
@@ -326,6 +328,96 @@ while (running)
                     Console.WriteLine(error.Message);
                 }
 
+            break;
+        }
+
+        case "7":
+        {
+            Console.WriteLine();
+            Console.WriteLine("ADD SITUATION REPORT");
+
+            Console.Write("Incident ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int incidentId))
+                {
+                    Console.WriteLine("Please enter a numeric incident ID.");
+                    break;
+                }
+
+            Console.Write("Reporting unit ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int unitId))
+                {
+                    Console.WriteLine("Please enter a numeric unit ID.");
+                    break;
+                }
+
+            Console.Write("Report message: ");
+            string message = Console.ReadLine() ?? "";
+
+            try
+                {
+                    // The service checks the message, case and active assignment.
+                    dispatchService.AddSituationReport(
+                        incidentId,
+                        unitId,
+                        message);
+
+                    Console.WriteLine("Situation report recorded");
+                }
+
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
+
+                catch (InvalidOperationException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
+
+            break;
+        }
+
+        case "8":
+        {
+            Console.WriteLine();
+            Console.WriteLine("INCIDENT LOG");
+
+            Console.Write("Incident ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int incidentId))
+                {
+                    Console.WriteLine("Please enter a numeric incident ID.");
+                    break;
+                }
+
+            try
+                {
+                    // Retrieve only the entries belonging to this state.
+                    var entries = dispatchService.GetIncidentLog(incidentId);
+
+                    Console.WriteLine();
+                    Console.WriteLine($"OPERATIONAL LOG - INCIDENT #{incidentId}");
+
+                    if (entries.Count == 0)
+                    {
+                        Console.WriteLine("No operational log entries recorded.");
+                    }
+
+                    foreach (var entry in entries)
+                    {
+                        Console.WriteLine(
+                            $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] " +
+                            $"{entry.Message} " +
+                            $"Position: ({entry.Latitude}; {entry.Longitude})");
+                    }
+                }
+
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
             break;
         }
 
