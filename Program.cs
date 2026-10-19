@@ -50,16 +50,12 @@ TO DO:
 
 // Create each service once, so its collections survive between menu choices.
 var incidentService = new IncidentService();
+var incidentGeneratorService = new IncidentGeneratorService(incidentService);
 var rescueUnitService = new RescueUnitService();
 var dispatchService = new DispatchService(incidentService, rescueUnitService);
 
 // Temporary starting data so we have something to view.
 // No dispatch, arrival or conclusion happens automatically.
-incidentService.RegisterIncident(
-    IncidentType.Fire,
-    "Smoke reported aboard a fishing vessel.",
-    59.03,
-    9.72);
 
 rescueUnitService.RegisterUnit(
     "Patrol One",
@@ -88,6 +84,7 @@ while (running)
     Console.WriteLine("6. Record unit arrival");
     Console.WriteLine("7. Add situation report");
     Console.WriteLine("8. View incident log");
+    Console.WriteLine("9. Simulate incoming incident");
     Console.WriteLine("0. Exit");
     Console.Write("Choose an option: ");
 
@@ -418,6 +415,25 @@ while (running)
                 {
                     Console.WriteLine(error.Message);
                 }
+            break;
+        }
+
+        case "9":
+        {
+            var incident = incidentGeneratorService.GenerateIncident();
+            
+            // A simple visual notification for the incoming report.
+            Console.WriteLine();
+            Console.WriteLine("*** NEW INCIDENT RECEIVED ***");
+
+            Console.WriteLine($"#{incident.Id} - {incident.Type} [{incident.Status}]");
+
+            Console.WriteLine(incident.Description);
+
+            Console.WriteLine($"Position: ({incident.Latitude}; {incident.Longitude})");
+
+            Console.WriteLine($"Reported: {incident.ReportedAt:yyyy-MM-dd HH:mm:ss} UTC");
+
             break;
         }
 
