@@ -69,6 +69,15 @@ rescueUnitService.RegisterUnit(
     59.10,
     9.80);
 
+// Settings for automatic incoming reports.
+TimeSpan incidentInterval = TimeSpan.FromSeconds(30);
+int maxActiveIncidents = 3;
+
+bool automaticIncidentsEnabled = true;
+
+DateTimeOffset nextIncidentAt =
+    DateTimeOffset.UtcNow.Add(incidentInterval);
+
 // Keep showing the menu until the operator chooses to exit.
 bool running = true;
 
@@ -85,15 +94,83 @@ while (running)
     Console.WriteLine("7. Add situation report");
     Console.WriteLine("8. View incident log");
     Console.WriteLine("9. Simulate incoming incident");
+    Console.WriteLine($"10. Pause/Resume automatic incidents. " + $"[{(automaticIncidentsEnabled ? "Running" : "Paused")}]");
     Console.WriteLine("0. Exit");
     Console.Write("Choose an option: ");
 
-    string? choice = Console.ReadLine();
+    // Collect the menu choice while also checking for incoming reports.
+    string typedChoice = "";
+    string? choice = null;
 
-    // End cleanly if the input stream closes.
-    if (choice is null)
+    while (choice is null)
     {
-        break;
+        if (automaticIncidentsEnabled && DateTimeOffset.UtcNow >= nextIncidentAt)
+        {
+            int activeIncidentCount = 0;
+
+            foreach (var incident in incidentService.GetIncidents())
+            {
+                if (incident.Status != IncidentStatus.Concluded)
+                {
+                    activeIncidentCount++;
+                }
+            }
+
+            if (activeIncidentCount < maxActiveIncidents)
+            {
+                var incomingIncident = incidentGeneratorService.GenerateIncident();
+
+                Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine("*** NEW INCIDENT RECEIVED ***");
+
+                Console.WriteLine($"#{incomingIncident.Id} - {incomingIncident.Type}");
+
+                Console.WriteLine(incomingIncident.Description);
+
+                Console.WriteLine(
+                    $"Position: ({incomingIncident.Latitude}; " +
+                    $"{incomingIncident.Longitude})");
+                
+                // Restore the prompt and anything already typed.
+                Console.Write("Choose an option: " + typedChoice);
+            }
+
+            // Schedule the next attempt, even when the queue is full.
+            nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
+        }
+
+        if (Console.KeyAvailable)
+        {
+            // Read one key without automatically displaying it.
+            var key = Console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.Enter)
+            {
+                choice = typedChoice;
+                Console.WriteLine();
+            }
+
+            else if (key.Key == ConsoleKey.Backspace)
+            {
+                if (typedChoice.Length > 0)
+                {
+                    typedChoice = typedChoice.Remove(typedChoice.Length - 1);
+
+                    // Move back, erase the displayed character, move back again.
+                    Console.Write("\b \b");
+                }
+            }
+
+            else if (char.IsDigit(key.KeyChar))
+            {
+                typedChoice += key.KeyChar;
+                Console.Write(key.KeyChar);
+            }
+        }
+
+        // Avoid constantly checking at full processor speed.
+        Thread.Sleep(50);
     }
 
     switch (choice.Trim())
@@ -433,6 +510,27 @@ while (running)
             Console.WriteLine($"Position: ({incident.Latitude}; {incident.Longitude})");
 
             Console.WriteLine($"Reported: {incident.ReportedAt:yyyy-MM-dd HH:mm:ss} UTC");
+
+            break;
+        }
+
+        case "10":
+        {
+            // Flip running to paused, or paused to running again.
+            automaticIncidentsEnabled = !automaticIncidentsEnabled;
+
+            // Resume with a fresh interval instead of an immediate report.
+            nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
+
+            if (automaticIncidentsEnabled)
+                {
+                    Console.WriteLine("Automatic incidents resumed.");
+                }
+
+                else
+                {
+                    Console.WriteLine("Automatic incidents paused.");
+                }
 
             break;
         }
