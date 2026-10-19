@@ -37,7 +37,7 @@ Operational Log Entry
 
 
 TO DO:
-- Interactive console — choose actions and enter incident/unit IDs.
+- Interactive console — choose actions and enter incident/unit IDs. (Currently Ongoing)
 - Core checks — verify reassignment, conclusion, and readiness rules, including rejected actions.
 - Persistence — save incidents, units, assignments, and logs across restarts.
 - Web API — expose our existing service methods through controllers and DTOs.
@@ -83,6 +83,9 @@ while (running)
     Console.WriteLine("1. List incidents");
     Console.WriteLine("2. List rescue units");
     Console.WriteLine("3. Register incident");
+    Console.WriteLine("4. Dispatch rescue unit");
+    Console.WriteLine("5. List assignments");
+    Console.WriteLine("6. Record unit arrival");
     Console.WriteLine("0. Exit");
     Console.Write("Choose an option: ");
 
@@ -206,6 +209,124 @@ while (running)
                 }
 
             break;    
+        }
+
+        case "4":
+        {
+            Console.WriteLine();
+            Console.WriteLine("DISPATCH RESCUE UNIT");
+
+            Console.Write("Incident ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int incidentId))
+            {
+                Console.WriteLine("Please enter a numeric incident ID.");
+                break;
+            }
+
+            Console.Write("Rescue unit ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int unitId))
+            {
+                Console.WriteLine("Please enter a numeric rescue unit ID.");
+                break;
+            }
+
+            try
+            {
+                // The service checks existence, availability and assignment rules.
+                var assignment = dispatchService.AssignUnit(incidentId, unitId);
+
+                Console.WriteLine(
+                    $"Dispatch #{assignment.Id}: unit #{assignment.UnitId} " +
+                    $"assigned to incident #{assignment.IncidentId}.");
+            }
+
+            catch (ArgumentException error)
+            {
+                Console.WriteLine(error.Message);
+            }
+            catch (InvalidOperationException error)
+            {
+                Console.WriteLine(error.Message);
+            }
+
+            break;
+        }
+
+        case "5":
+        {
+             Console.WriteLine();
+             Console.WriteLine("ASSIGNMENTS");
+
+             var assignments = dispatchService.GetAssignments();
+
+             if (assignments.Count == 0)
+                {
+                    Console.WriteLine("No assignments recorded.");
+                }
+
+            foreach (var assignment in assignments)
+                {
+                    // Work out which stage this assignment has reached.
+                    string progress;
+
+                    if (assignment.EndedAt is not null)
+                    {
+                        progress = "Ended.";
+                    }
+
+                    else if (assignment.ArrivedAt is not null)
+                    {
+                        progress = "On scene.";
+                    }
+
+                    else
+                    {
+                        progress = "En route.";
+                    }
+
+                    Console.WriteLine($"Assignment #{assignment.Id}: " +
+                        $"unit #{assignment.UnitId} → " +
+                        $"incident #{assignment.IncidentId} [{progress}]");
+                }
+
+                break;
+        }
+
+        case "6":
+        {
+            Console.WriteLine();
+            Console.WriteLine("RECORD ARRIVAL");
+
+            Console.WriteLine("Assignment ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int assignmentId))
+                {
+                    Console.WriteLine("Please enter a numeric assignment ID");
+                    break;
+                }
+
+                try
+                {   
+                    // The service validates the assignment and records the arrival.
+                    var assignment = dispatchService.RecordArrival(assignmentId);
+
+                    Console.WriteLine($"Unit #{assignment.UnitId} arrived at " +
+                    $"incident #{assignment.IncidentId} at " +
+                    $"{assignment.ArrivedAt:HH:mm:ss} UTC.");
+                }
+
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
+                catch (InvalidOperationException error)
+                {
+                    Console.WriteLine(error.Message);
+                }
+
+            break;
         }
 
         case "0":
