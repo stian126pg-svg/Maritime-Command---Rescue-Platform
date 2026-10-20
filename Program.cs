@@ -37,7 +37,7 @@ Operational Log Entry
 
 
 TO DO:
-- Interactive console — choose actions and enter incident/unit IDs. (Currently Ongoing)
+- Interactive console — choose actions and enter incident/unit IDs. (Currently Ongoing. NEEDS CLEANUP)
 - Core checks — verify reassignment, conclusion, and readiness rules, including rejected actions.
 - Persistence — save incidents, units, assignments, and logs across restarts.
 - Web API — expose our existing service methods through controllers and DTOs.
@@ -95,6 +95,7 @@ while (running)
     Console.WriteLine("8. View incident log");
     Console.WriteLine("9. Simulate incoming incident");
     Console.WriteLine($"10. Pause/Resume automatic incidents. " + $"[{(automaticIncidentsEnabled ? "Running" : "Paused")}]");
+    Console.WriteLine("11. Conclude incident");
     Console.WriteLine("0. Exit");
     Console.Write("Choose an option: ");
 
@@ -531,6 +532,87 @@ while (running)
                 {
                     Console.WriteLine("Automatic incidents paused.");
                 }
+
+            break;
+        }
+
+        case "11":
+        {
+            Console.WriteLine();
+            Console.WriteLine("CONCLUDE INCIDENT");
+
+            Console.Write("Incident ID: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int incidentId))
+            {
+                Console.WriteLine("Please enter a numeric incident ID.");
+                break;
+            }
+
+            // Show the case before asking the operator to conclude it.
+            var incident = incidentService.GetIncidentById(incidentId);
+
+            if (incident is null)
+            {
+                Console.WriteLine("Incident not found.");
+                break;
+            }
+
+            if (incident.Status == IncidentStatus.Concluded)
+            {
+                Console.WriteLine("This incident is already concluded.");
+                break;
+            }
+
+            Console.WriteLine($"#{incident.Id} — {incident.Type}: {incident.Description}");
+
+            Console.Write("Conclusion: ");
+            string conclusion = Console.ReadLine() ?? "";
+
+            Console.WriteLine(
+                "Confirm assistance is complete and necessary handovers " +
+                "to other emergency services are finished.");
+
+            Console.WriteLine("For an investigated false alarm, confirm no assistance is required.");
+
+            Console.Write("Type YES to confirm, or anything else to cancel: ");
+
+            string confirmation = Console.ReadLine() ?? "";
+
+            bool responseAndHandoversComplete = string.Equals(
+                confirmation.Trim(),
+                "YES",
+                StringComparison.OrdinalIgnoreCase);
+
+            if (!responseAndHandoversComplete)
+            {
+                Console.WriteLine("Conclusion cancelled. Incident unchanged.");
+                break;
+            }
+
+            try
+            {
+                // The service records the conclusion and ends active assignments.
+                var concludedIncident = dispatchService.ConcludeIncident(
+                    incidentId,
+                    conclusion,
+                    responseAndHandoversComplete);
+
+                Console.WriteLine(
+                    $"Incident #{concludedIncident.Id} concluded at " +
+                    $"{concludedIncident.ConcludedAt:yyyy-MM-dd HH:mm:ss} UTC.");
+
+                Console.WriteLine(
+                    "Active assignments ended. Released units are Returning.");
+            }
+            catch (ArgumentException error)
+            {
+                Console.WriteLine(error.Message);
+            }
+            catch (InvalidOperationException error)
+            {
+                Console.WriteLine(error.Message);
+            }
 
             break;
         }
