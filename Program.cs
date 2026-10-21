@@ -74,9 +74,16 @@ rescueUnitService.RegisterUnit(
     9.80);
 
 
-// Settings for automatic incoming reports.
-TimeSpan incidentInterval = TimeSpan.FromSeconds(30);
+// Checks for a possible incoming report every ten seconds.
+TimeSpan incidentInterval = TimeSpan.FromSeconds(10);
 int maxActiveIncidents = 3;
+
+// Percentages: start at 10%, increases after quiet checks, stops at 60%.
+int initialIncidentChance = 10;
+int incidentChanceIncrease = 5;
+int maximumIncidentChance = 60;
+
+int currentIncidentChance = initialIncidentChance;
 
 bool automaticIncidentsEnabled = true;
 
@@ -177,7 +184,7 @@ bool UpdateSimulation()
         return false;
     }
 
-    // Schedule the next attempt even when the active-case limit is reached.
+    // Schedule the next check. Also don't generate a backlog of missed checks.
     nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
 
     int activeIncidentCount = 0;
@@ -190,15 +197,29 @@ bool UpdateSimulation()
         }
     }
 
+    // At capacity, hold the current chance without rolling or increasing it.
     if (activeIncidentCount >= maxActiveIncidents)
     {
         return false;
     }
 
+    // Next (100) produces a whole number from 0 through 99.
+    int roll = Random.Shared.Next(100);
+
+    if (roll >= currentIncidentChance)
+    {
+        // Quiet check: increase the chance without exceeding the maximum.
+        currentIncidentChance = Math.Min(currentIncidentChance + incidentChanceIncrease, maximumIncidentChance);
+        return false;
+    }
+
+    // Successful Roll: register the report through our existing service.
     var incidentReport = incidentGeneratorService.GenerateIncident();
 
+    currentIncidentChance = initialIncidentChance;
+
     Console.WriteLine();
-    Console.WriteLine();
+    Console.WriteLine();    
     Console.WriteLine("*** NEW INCIDENT RECEIVED ***");
 
     Console.WriteLine(
