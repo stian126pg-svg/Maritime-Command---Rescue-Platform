@@ -37,7 +37,7 @@ Operational Log Entry
 
 
 TO DO:
-- Interactive console — choose actions and enter incident/unit IDs. (Currently Ongoing. NEEDS CLEANUP)
+- Interactive console — choose actions and see overview of incidents/units, conclude cases/incidents and more. (Currently Ongoing. NEEDS CLEANUP)
 - Core checks — verify reassignment, conclusion, and readiness rules, including rejected actions.
 - Persistence — save incidents, units, assignments, and logs across restarts.
 - Web API — expose our existing service methods through controllers and DTOs.
@@ -90,571 +90,79 @@ while (running)
 {
     Console.WriteLine();
     Console.WriteLine("MARITIME COMMAND & RESCUE");
-    Console.WriteLine("1. List incidents");
-    Console.WriteLine("2. List rescue units");
-    Console.WriteLine("3. Register incident");
-    Console.WriteLine("4. Dispatch rescue unit");
-    Console.WriteLine("5. List assignments");
-    Console.WriteLine("6. Record unit arrival");
-    Console.WriteLine("7. Add situation report");
-    Console.WriteLine("8. View incident log");
-    Console.WriteLine("9. Simulate incoming incident");
+    Console.WriteLine("1. Incident board");
+    Console.WriteLine("2. Fleet overview");
+    Console.WriteLine("3. Control module");
+    Console.WriteLine("4. Case review and reports");
+    Console.WriteLine("5. Case history");
 
     Console.WriteLine(
-        $"10. Pause/Resume automatic incidents. " +
+        $"6. Pause/resume " +
         $"[{(automaticIncidentsEnabled ? "Running" : "Paused")}]");
 
-    Console.WriteLine("11. Conclude incident");
-    Console.WriteLine("12. Assess unit readiness");
     Console.WriteLine("0. Exit");
 
-    // This function handles keyboard input and simulation updates.
     string choice = ReadOperatorInput(
         "Choose an option: ",
         digitsOnly: true);
 
-    switch (choice.Trim())
+    // Handle service errors in one place for all menu actions.
+    try
     {
-        case "1":
+        switch (choice.Trim())
         {
-            Console.WriteLine();
-            Console.WriteLine("INCIDENTS");
-
-            var incidents = incidentService.GetIncidents();
-
-            if (incidents.Count == 0)
-            {
-                Console.WriteLine("No incidents registered.");
-            }
-
-            foreach (var incident in incidents)
-            {
-                Console.WriteLine(
-                    $"#{incident.Id} - {incident.Type} " +
-                    $"[{incident.Status}]: {incident.Description}");
-            }
-
-            break;
-        }
-
-        case "2":
-        {
-            Console.WriteLine();
-            Console.WriteLine("RESCUE UNITS");
-
-            var units = rescueUnitService.GetUnits();
-
-            if (units.Count == 0)
-            {
-                Console.WriteLine("No rescue units registered.");
-            }
-
-            foreach (var unit in units)
-            {
-                Console.WriteLine(
-                    $"#{unit.Id} - {unit.Name}: " +
-                    $"{unit.Type} [{unit.Status}]");
-            }
-
-            break;
-        }
-
-        case "3":
-        {
-            Console.WriteLine();
-            Console.WriteLine("REGISTER INCIDENT");
-
-            // Display the categories the operator can choose from.
-            var incidentTypes = Enum.GetValues<IncidentType>();
-
-            for (int index = 0; index < incidentTypes.Length; index++)
-            {
-                Console.WriteLine(
-                    $"{index + 1}. {incidentTypes[index]}");
-            }
-
-            // Read text, then check whether it represents a valid choice.
-            if (!int.TryParse(
-                    ReadOperatorInput("Select incident type: "),
-                    out int typeChoice) ||
-                typeChoice < 1 ||
-                typeChoice > incidentTypes.Length)
-            {
-                Console.WriteLine(
-                    "Please select one of the listed incident types.");
-
+            case "1":
+                ShowIncidentBoard();
                 break;
-            }
 
-            // Menu numbers start at 1; array positions start at 0.
-            IncidentType selectedType = incidentTypes[typeChoice - 1];
-
-            string description = ReadOperatorInput("Description: ");
-
-            if (!double.TryParse(
-                ReadOperatorInput(
-                    "Latitude (use your local decimal separator): "),
-                out double latitude))
-            {
-                Console.WriteLine("Please enter a numerical latitude.");
+            case "2":
+                ShowFleetOverview();
                 break;
-            }
 
-            if (!double.TryParse(
-                ReadOperatorInput(
-                    "Longitude (use your local decimal separator): "),
-                out double longitude))
-            {
-                Console.WriteLine("Please enter a numerical longitude.");
+            case "3":
+                OpenControlModule();
                 break;
-            }
 
-            try
-            {
-                // The service enforces our registration rules.
-                var incident = incidentService.RegisterIncident(
-                    selectedType,
-                    description,
-                    latitude,
-                    longitude);
+            case "4":
+                ReviewCase();
+                break;
+
+            case "5":
+                ShowCaseHistory();
+                break;
+
+            case "6":
+                automaticIncidentsEnabled = !automaticIncidentsEnabled;
+
+                nextIncidentAt =
+                    DateTimeOffset.UtcNow.Add(incidentInterval);
 
                 Console.WriteLine(
-                    $"Incident #{incident.Id} registered: " +
-                    $"{incident.Type} [{incident.Status}].");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "4":
-        {
-            Console.WriteLine();
-            Console.WriteLine("DISPATCH RESCUE UNIT");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Incident ID: "),
-                out int incidentId))
-            {
-                Console.WriteLine("Please enter a numeric incident ID.");
-                break;
-            }
-
-            if (!int.TryParse(
-                ReadOperatorInput("Rescue unit ID: "),
-                out int unitId))
-            {
-                Console.WriteLine("Please enter a numeric rescue unit ID.");
-                break;
-            }
-
-            try
-            {
-                // The service checks existence, availability and assignments.
-                var assignment = dispatchService.AssignUnit(
-                    incidentId,
-                    unitId);
-
-                Console.WriteLine(
-                    $"Dispatch #{assignment.Id}: " +
-                    $"unit #{assignment.UnitId} assigned to " +
-                    $"incident #{assignment.IncidentId}.");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-            catch (InvalidOperationException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "5":
-        {
-            Console.WriteLine();
-            Console.WriteLine("ASSIGNMENTS");
-
-            var assignments = dispatchService.GetAssignments();
-
-            if (assignments.Count == 0)
-            {
-                Console.WriteLine("No assignments recorded.");
-            }
-
-            foreach (var assignment in assignments)
-            {
-                // Check Ended first because an ended assignment
-                // may also have an arrival timestamp.
-                string progress;
-
-                if (assignment.EndedAt is not null)
-                {
-                    progress = "Ended";
-                }
-                else if (assignment.ArrivedAt is not null)
-                {
-                    progress = "On scene";
-                }
-                else
-                {
-                    progress = "En route";
-                }
-
-                Console.WriteLine(
-                    $"Assignment #{assignment.Id}: " +
-                    $"unit #{assignment.UnitId} → " +
-                    $"incident #{assignment.IncidentId} [{progress}]");
-            }
-
-            break;
-        }
-
-        case "6":
-        {
-            Console.WriteLine();
-            Console.WriteLine("RECORD ARRIVAL");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Assignment ID: "),
-                out int assignmentId))
-            {
-                Console.WriteLine("Please enter a numeric assignment ID.");
-                break;
-            }
-
-            try
-            {
-                // The service validates the assignment and records arrival.
-                var assignment =
-                    dispatchService.RecordArrival(assignmentId);
-
-                Console.WriteLine(
-                    $"Unit #{assignment.UnitId} arrived at " +
-                    $"incident #{assignment.IncidentId} at " +
-                    $"{assignment.ArrivedAt:HH:mm:ss} UTC.");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-            catch (InvalidOperationException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "7":
-        {
-            Console.WriteLine();
-            Console.WriteLine("ADD SITUATION REPORT");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Incident ID: "),
-                out int incidentId))
-            {
-                Console.WriteLine("Please enter a numeric incident ID.");
-                break;
-            }
-
-            if (!int.TryParse(
-                ReadOperatorInput("Reporting unit ID: "),
-                out int unitId))
-            {
-                Console.WriteLine("Please enter a numeric unit ID.");
-                break;
-            }
-
-            string message = ReadOperatorInput("Report message: ");
-
-            try
-            {
-                // The service checks the message, case and active assignment.
-                dispatchService.AddSituationReport(
-                    incidentId,
-                    unitId,
-                    message);
-
-                Console.WriteLine("Situation report recorded.");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-            catch (InvalidOperationException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "8":
-        {
-            Console.WriteLine();
-            Console.WriteLine("INCIDENT LOG");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Incident ID: "),
-                out int incidentId))
-            {
-                Console.WriteLine("Please enter a numeric incident ID.");
-                break;
-            }
-
-            try
-            {
-                // Retrieve only the entries belonging to this case.
-                var entries = dispatchService.GetIncidentLog(incidentId);
-
-                Console.WriteLine();
-                Console.WriteLine(
-                    $"OPERATIONAL LOG - INCIDENT #{incidentId}");
-
-                if (entries.Count == 0)
-                {
-                    Console.WriteLine(
-                        "No operational log entries recorded.");
-                }
-
-                foreach (var entry in entries)
-                {
-                    Console.WriteLine(
-                        $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] " +
-                        $"{entry.Message} " +
-                        $"Position: ({entry.Latitude}; {entry.Longitude})");
-                }
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "9":
-        {
-            // Manual generation intentionally bypasses the automatic cap.
-            var incident = incidentGeneratorService.GenerateIncident();
-
-            Console.WriteLine();
-            Console.WriteLine("*** NEW INCIDENT RECEIVED ***");
-
-            Console.WriteLine(
-                $"#{incident.Id} - {incident.Type} [{incident.Status}]");
-
-            Console.WriteLine(incident.Description);
-
-            Console.WriteLine(
-                $"Position: ({incident.Latitude}; {incident.Longitude})");
-
-            Console.WriteLine(
-                $"Reported: {incident.ReportedAt:yyyy-MM-dd HH:mm:ss} UTC");
-
-            break;
-        }
-
-        case "10":
-        {
-            automaticIncidentsEnabled = !automaticIncidentsEnabled;
-
-            // Resume with a fresh interval.
-            nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
-
-            if (automaticIncidentsEnabled)
-            {
-                Console.WriteLine("Automatic incidents resumed.");
-            }
-            else
-            {
-                Console.WriteLine("Automatic incidents paused.");
-            }
-
-            break;
-        }
-
-        case "11":
-        {
-            Console.WriteLine();
-            Console.WriteLine("CONCLUDE INCIDENT");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Incident ID: "),
-                out int incidentId))
-            {
-                Console.WriteLine("Please enter a numeric incident ID.");
-                break;
-            }
-
-            // Show the case before asking the operator to conclude it.
-            var incident = incidentService.GetIncidentById(incidentId);
-
-            if (incident is null)
-            {
-                Console.WriteLine("Incident not found.");
-                break;
-            }
-
-            if (incident.Status == IncidentStatus.Concluded)
-            {
-                Console.WriteLine("This incident is already concluded.");
-                break;
-            }
-
-            Console.WriteLine(
-                $"#{incident.Id} — {incident.Type}: {incident.Description}");
-
-            string conclusion = ReadOperatorInput("Conclusion: ");
-
-            Console.WriteLine(
-                "Confirm assistance is complete and necessary handovers " +
-                "to other emergency services are finished.");
-
-            Console.WriteLine(
-                "For an investigated false alarm, " +
-                "confirm no assistance is required.");
-
-            string confirmation = ReadOperatorInput(
-                "Type YES to confirm, or anything else to cancel: ");
-
-            bool responseAndHandoversComplete = string.Equals(
-                confirmation.Trim(),
-                "YES",
-                StringComparison.OrdinalIgnoreCase);
-
-            if (!responseAndHandoversComplete)
-            {
-                Console.WriteLine(
-                    "Conclusion cancelled. Incident unchanged.");
+                    automaticIncidentsEnabled
+                        ? "Automatic incidents resumed."
+                        : "Automatic incidents paused.");
 
                 break;
-            }
 
-            try
-            {
-                // The service concludes the case and ends active assignments.
-                var concludedIncident = dispatchService.ConcludeIncident(
-                    incidentId,
-                    conclusion,
-                    responseAndHandoversComplete);
-
-                Console.WriteLine(
-                    $"Incident #{concludedIncident.Id} concluded at " +
-                    $"{concludedIncident.ConcludedAt:yyyy-MM-dd HH:mm:ss} UTC.");
-
-                Console.WriteLine(
-                    "Active assignments ended. Released units are Returning.");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-            catch (InvalidOperationException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "12":
-        {
-            Console.WriteLine();
-            Console.WriteLine("ASSESS UNIT READINESS");
-
-            if (!int.TryParse(
-                ReadOperatorInput("Unit ID: "),
-                out int unitId))
-            {
-                Console.WriteLine("Please enter a numeric unit ID.");
+            case "0":
+                running = false;
+                Console.WriteLine("Command console closed.");
                 break;
-            }
 
-            var unit = rescueUnitService.GetUnitById(unitId);
-
-            if (unit is null)
-            {
-                Console.WriteLine("Unit not found.");
+            default:
+                Console.WriteLine("Please select a listed option.");
                 break;
-            }
-
-            Console.WriteLine(
-                $"#{unit.Id} - {unit.Name} [{unit.Status}]");
-
-            Console.WriteLine(
-                "Consider fuel, equipment, crew readiness " +
-                "and any required debrief.");
-
-            Console.WriteLine("1. Ready for dispatch - Available");
-            Console.WriteLine("2. Not ready for dispatch - Unavailable");
-            Console.WriteLine("0. Cancel");
-
-            string assessment = ReadOperatorInput(
-                "Select assessment: ").Trim();
-
-            if (assessment == "0")
-            {
-                Console.WriteLine(
-                    "Assessment cancelled. Unit unchanged.");
-
-                break;
-            }
-
-            if (assessment != "1" && assessment != "2")
-            {
-                Console.WriteLine(
-                    "Please select one of the listed options.");
-
-                break;
-            }
-
-            bool readyForDispatch = assessment == "1";
-
-            try
-            {
-                // Active assignments prevent readiness changes.
-                var assessedUnit = dispatchService.AssessUnitReadiness(
-                    unitId,
-                    readyForDispatch);
-
-                Console.WriteLine(
-                    $"{assessedUnit.Name} is now {assessedUnit.Status}.");
-            }
-            catch (ArgumentException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-            catch (InvalidOperationException error)
-            {
-                Console.WriteLine(error.Message);
-            }
-
-            break;
-        }
-
-        case "0":
-        {
-            running = false;
-            Console.WriteLine("Command console closed.");
-            break;
-        }
-
-        default:
-        {
-            Console.WriteLine("Please select one of the menu options.");
-            break;
         }
     }
+    catch (ArgumentException error)
+    {
+        Console.WriteLine(error.Message);
+    }
+    catch (InvalidOperationException error)
+    {
+        Console.WriteLine(error.Message);
+    }
 }
-
 
 // Local functions below run only when called.
 // They reuse the service instances and settings declared above.
@@ -752,5 +260,494 @@ string ReadOperatorInput(string prompt, bool digitsOnly = false)
 
         // A short wait prevents the polling loop from consuming a full CPU core.
         Thread.Sleep(50);
+    }
+}
+
+// Reads a positive ID. Zero cancels; invalid input returns no ID.
+int? ReadId(string prompt)
+{
+    string input = ReadOperatorInput(prompt);
+
+    if (input.Trim() == "0")
+    {
+        return null;
+    }
+
+    if (!int.TryParse(input, out int id) || id < 1)
+    {
+        Console.WriteLine("Please enter a positive numeric ID.");
+        return null;
+    }
+
+    return id;
+}
+
+
+// Shows cases that still need attention.
+void ShowIncidentBoard()
+{
+    Console.WriteLine();
+    Console.WriteLine("INCIDENT BOARD");
+
+    int activeCount = 0;
+
+    foreach (var incident in incidentService.GetIncidents())
+    {
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            continue;
+        }
+
+        activeCount++;
+
+        Console.WriteLine();
+        Console.WriteLine(
+            $"#{incident.Id} — {incident.Type} [{incident.Status}]");
+
+        Console.WriteLine(incident.Description);
+
+        Console.WriteLine(
+            $"Position: ({incident.Latitude}; {incident.Longitude})");
+
+        int assignedCount = 0;
+
+        foreach (var assignment in dispatchService.GetAssignments())
+        {
+            if (assignment.IncidentId == incident.Id &&
+                assignment.EndedAt is null)
+            {
+                assignedCount++;
+
+                var unit = rescueUnitService.GetUnitById(
+                    assignment.UnitId);
+
+                string unitName = unit?.Name ?? "Unknown unit";
+
+                string progress = assignment.ArrivedAt is null
+                    ? "En route"
+                    : "On scene";
+
+                Console.WriteLine(
+                    $"  Assignment #{assignment.Id}: " +
+                    $"{unitName} [{progress}]");
+            }
+        }
+
+        if (assignedCount == 0)
+        {
+            Console.WriteLine("  No units assigned.");
+        }
+    }
+
+    if (activeCount == 0)
+    {
+        Console.WriteLine("No active incidents.");
+    }
+}
+
+
+// Shows the whole fleet, including units currently occupied.
+void ShowFleetOverview()
+{
+    Console.WriteLine();
+    Console.WriteLine("FLEET OVERVIEW");
+
+    foreach (var unit in rescueUnitService.GetUnits())
+    {
+        Console.WriteLine();
+        Console.WriteLine(
+            $"#{unit.Id} — {unit.Name}: {unit.Type} [{unit.Status}]");
+
+        Console.WriteLine(
+            $"Position: ({unit.Latitude}; {unit.Longitude})");
+
+        foreach (var assignment in dispatchService.GetAssignments())
+        {
+            if (assignment.UnitId == unit.Id &&
+                assignment.EndedAt is null)
+            {
+                string progress = assignment.ArrivedAt is null
+                    ? "En route"
+                    : "On scene";
+
+                Console.WriteLine(
+                    $"Current task: incident #{assignment.IncidentId} " +
+                    $"[{progress}]");
+            }
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("1. Assess unit readiness");
+    Console.WriteLine("0. Back");
+
+    string choice = ReadOperatorInput("Choose: ", digitsOnly: true);
+
+    if (choice == "0")
+    {
+        return;
+    }
+
+    if (choice != "1")
+    {
+        Console.WriteLine("Please select a listed option.");
+        return;
+    }
+
+    int? unitId = ReadId("Unit ID (0 to cancel): ");
+
+    if (unitId is null)
+    {
+        return;
+    }
+
+    var selectedUnit = rescueUnitService.GetUnitById(unitId.Value);
+
+    if (selectedUnit is null)
+    {
+        Console.WriteLine("Rescue unit not found.");
+        return;
+    }
+
+    Console.WriteLine(
+        $"{selectedUnit.Name} [{selectedUnit.Status}]");
+
+    Console.WriteLine(
+        "Consider fuel, equipment, crew readiness and required debrief.");
+
+    Console.WriteLine("1. Ready — Available");
+    Console.WriteLine("2. Not ready — Unavailable");
+    Console.WriteLine("0. Cancel");
+
+    string assessment = ReadOperatorInput(
+        "Assessment: ",
+        digitsOnly: true);
+
+    if (assessment == "0")
+    {
+        return;
+    }
+
+    if (assessment != "1" && assessment != "2")
+    {
+        Console.WriteLine("Please select a listed option.");
+        return;
+    }
+
+    var assessedUnit = dispatchService.AssessUnitReadiness(
+        unitId.Value,
+        readyForDispatch: assessment == "1");
+
+    Console.WriteLine(
+        $"{assessedUnit.Name} is now {assessedUnit.Status}.");
+}
+
+
+// Coordinates new dispatches and direct transfers between cases.
+void OpenControlModule()
+{
+    Console.WriteLine();
+    Console.WriteLine("CONTROL MODULE");
+    Console.WriteLine("1. Dispatch available unit");
+    Console.WriteLine("2. Reassign unit to another incident");
+    Console.WriteLine("0. Back");
+
+    string action = ReadOperatorInput("Choose: ", digitsOnly: true);
+
+    if (action == "0")
+    {
+        return;
+    }
+
+    if (action != "1" && action != "2")
+    {
+        Console.WriteLine("Please select a listed option.");
+        return;
+    }
+
+    int? incidentId = ReadId("Target incident ID (0 to cancel): ");
+
+    if (incidentId is null)
+    {
+        return;
+    }
+
+    int? unitId = ReadId("Unit ID (0 to cancel): ");
+
+    if (unitId is null)
+    {
+        return;
+    }
+
+    Assignment assignment;
+
+    if (action == "1")
+    {
+        assignment = dispatchService.AssignUnit(
+            incidentId.Value,
+            unitId.Value);
+    }
+    else
+    {
+        Console.WriteLine(
+            "Confirm the unit can leave its current task " +
+            "and is ready for the new response.");
+
+        string confirmation = ReadOperatorInput(
+            "Type YES to reassign: ");
+
+        if (!string.Equals(
+            confirmation.Trim(),
+            "YES",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Reassignment cancelled.");
+            return;
+        }
+
+        assignment = dispatchService.ReassignUnit(
+            unitId.Value,
+            incidentId.Value,
+            readinessConfirmed: true);
+    }
+
+    Console.WriteLine(
+        $"Assignment #{assignment.Id}: " +
+        $"unit #{assignment.UnitId} → incident #{assignment.IncidentId}.");
+}
+
+
+// Combines case information, reports and operational actions.
+void ReviewCase()
+{
+    Console.WriteLine();
+    Console.WriteLine("CASE REVIEW");
+
+    int? incidentId = ReadId("Incident ID (0 to cancel): ");
+
+    if (incidentId is null)
+    {
+        return;
+    }
+
+    var incident = incidentService.GetIncidentById(incidentId.Value);
+
+    if (incident is null)
+    {
+        Console.WriteLine("Incident not found.");
+        return;
+    }
+
+    Console.WriteLine(
+        $"#{incident.Id} — {incident.Type} [{incident.Status}]");
+
+    Console.WriteLine(incident.Description);
+
+    PrintIncidentLog(incident.Id);
+
+    // Concluded cases remain readable, but cannot receive these actions.
+    if (incident.Status == IncidentStatus.Concluded)
+    {
+        return;
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("1. Add situation report");
+    Console.WriteLine("2. Conclude incident");
+    Console.WriteLine("3. Record arrival — manual control");
+    Console.WriteLine("0. Back");
+
+    string action = ReadOperatorInput("Choose: ", digitsOnly: true);
+
+    switch (action)
+    {
+        case "1":
+        {
+            int? unitId = ReadId("Reporting unit ID (0 to cancel): ");
+
+            if (unitId is null)
+            {
+                return;
+            }
+
+            string message = ReadOperatorInput("Report: ");
+
+            dispatchService.AddSituationReport(
+                incident.Id,
+                unitId.Value,
+                message);
+
+            Console.WriteLine("Situation report recorded.");
+            break;
+        }
+
+        case "2":
+        {
+            string conclusion = ReadOperatorInput("Conclusion: ");
+
+            Console.WriteLine(
+                "Confirm assistance and necessary handovers are complete.");
+
+            Console.WriteLine(
+                "For an investigated false alarm, " +
+                "confirm no assistance is required.");
+
+            string confirmation = ReadOperatorInput(
+                "Type YES to conclude: ");
+
+            if (!string.Equals(
+                confirmation.Trim(),
+                "YES",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Conclusion cancelled.");
+                return;
+            }
+
+            var concludedIncident = dispatchService.ConcludeIncident(
+                incident.Id,
+                conclusion,
+                responseAndHandoversComplete: true);
+
+            Console.WriteLine(
+                $"Case #{concludedIncident.Id} concluded. " +
+                "Released units are Returning.");
+
+            break;
+        }
+
+        case "3":
+        {
+            // Temporary manual control until simulated travel is added.
+            Console.WriteLine("ACTIVE ASSIGNMENTS FOR THIS CASE");
+
+            foreach (var assignment in dispatchService.GetAssignments())
+            {
+                if (assignment.IncidentId == incident.Id &&
+                    assignment.EndedAt is null)
+                {
+                    Console.WriteLine(
+                        $"Assignment #{assignment.Id}: " +
+                        $"unit #{assignment.UnitId}");
+                }
+            }
+
+            int? assignmentId = ReadId(
+                "Assignment ID (0 to cancel): ");
+
+            if (assignmentId is null)
+            {
+                return;
+            }
+
+            // Prevent this case screen from updating another case.
+            bool belongsToCase = false;
+
+            foreach (var assignment in dispatchService.GetAssignments())
+            {
+                if (assignment.Id == assignmentId.Value &&
+                    assignment.IncidentId == incident.Id)
+                {
+                    belongsToCase = true;
+                    break;
+                }
+            }
+
+            if (!belongsToCase)
+            {
+                Console.WriteLine(
+                    "That assignment does not belong to this case.");
+
+                return;
+            }
+
+            var arrivedAssignment = dispatchService.RecordArrival(
+                assignmentId.Value);
+
+            Console.WriteLine(
+                $"Unit #{arrivedAssignment.UnitId} arrived at " +
+                $"{arrivedAssignment.ArrivedAt:HH:mm:ss} UTC.");
+
+            break;
+        }
+
+        case "0":
+            return;
+
+        default:
+            Console.WriteLine("Please select a listed option.");
+            break;
+    }
+}
+
+
+// Lists handled cases and allows their reports to be read.
+void ShowCaseHistory()
+{
+    Console.WriteLine();
+    Console.WriteLine("CASE HISTORY");
+
+    int concludedCount = 0;
+
+    foreach (var incident in incidentService.GetIncidents())
+    {
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            concludedCount++;
+
+            Console.WriteLine(
+                $"#{incident.Id} — {incident.Type}: " +
+                $"{incident.Description} " +
+                $"[Concluded {incident.ConcludedAt:yyyy-MM-dd HH:mm:ss} UTC]");
+        }
+    }
+
+    if (concludedCount == 0)
+    {
+        Console.WriteLine("No concluded cases.");
+        return;
+    }
+
+    int? incidentId = ReadId(
+        "Case ID to view reports (0 to return): ");
+
+    if (incidentId is null)
+    {
+        return;
+    }
+
+    var selectedIncident = incidentService.GetIncidentById(
+        incidentId.Value);
+
+    if (selectedIncident is null ||
+        selectedIncident.Status != IncidentStatus.Concluded)
+    {
+        Console.WriteLine("Please select a concluded case.");
+        return;
+    }
+
+    PrintIncidentLog(selectedIncident.Id);
+}
+
+
+// Shared by active case review and concluded case history.
+void PrintIncidentLog(int incidentId)
+{
+    var entries = dispatchService.GetIncidentLog(incidentId);
+
+    Console.WriteLine();
+    Console.WriteLine($"OPERATIONAL LOG — INCIDENT #{incidentId}");
+
+    if (entries.Count == 0)
+    {
+        Console.WriteLine("No operational log entries recorded.");
+    }
+
+    foreach (var entry in entries)
+    {
+        Console.WriteLine(
+            $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] " +
+            $"{entry.Message} " +
+            $"Position: ({entry.Latitude}; {entry.Longitude})");
     }
 }
