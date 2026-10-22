@@ -58,6 +58,7 @@ var rescueUnitService = new RescueUnitService();
 
 var dispatchService = new DispatchService(incidentService, rescueUnitService);
 
+var unitTravelSimulationService = new UnitTravelSimulationService(incidentService, rescueUnitService, dispatchService);
 
 // Temporary starting fleet.
 // No dispatch, arrival or conclusion happens automatically.
@@ -89,6 +90,10 @@ bool automaticIncidentsEnabled = true;
 
 DateTimeOffset nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
 
+// Measure elapsed time independently of changes to the computer's clock.
+var simulationClock = System.Diagnostics.Stopwatch.StartNew();
+
+TimeSpan previousSimulationCheck = simulationClock.Elapsed;
 
 // Keep showing the menu until the operator chooses to exit.
 bool running = true;
@@ -140,6 +145,7 @@ while (running)
 
             case "6":
                 automaticIncidentsEnabled = !automaticIncidentsEnabled;
+                previousSimulationCheck = simulationClock.Elapsed;
 
                 nextIncidentAt =
                     DateTimeOffset.UtcNow.Add(incidentInterval);
@@ -178,10 +184,35 @@ while (running)
 // Returns true when a notification was printed.
 bool UpdateSimulation()
 {
-    if (!automaticIncidentsEnabled ||
-        DateTimeOffset.UtcNow < nextIncidentAt)
+    TimeSpan now = simulationClock.Elapsed;
+    TimeSpan elapsed = now - previousSimulationCheck;
+
+    previousSimulationCheck = now;
+
+    // Keep measuring time while paused, but don't advance the simulation.
+    if (!automaticIncidentsEnabled)
     {
         return false;
+    }
+
+    bool notificationPrinted = false;
+
+    // Travel updates run independently of the incident-generation interval.
+    var travelNotifications = unitTravelSimulationService.Update(elapsed);
+
+    foreach (var notification in travelNotifications)
+    {
+        Console.WriteLine();
+        Console.WriteLine();
+        Console.WriteLine("*** UNIT UPDATE ***");
+        Console.WriteLine(notification);
+
+        notificationPrinted = true;
+    }
+    
+    if (DateTimeOffset.UtcNow < nextIncidentAt)
+    {
+        return notificationPrinted;
     }
 
     // Schedule the next check. Also don't generate a backlog of missed checks.
@@ -200,7 +231,7 @@ bool UpdateSimulation()
     // At capacity, hold the current chance without rolling or increasing it.
     if (activeIncidentCount >= maxActiveIncidents)
     {
-        return false;
+        return notificationPrinted;
     }
 
     // Next (100) produces a whole number from 0 through 99.
@@ -210,7 +241,8 @@ bool UpdateSimulation()
     {
         // Quiet check: increase the chance without exceeding the maximum.
         currentIncidentChance = Math.Min(currentIncidentChance + incidentChanceIncrease, maximumIncidentChance);
-        return false;
+
+        return notificationPrinted;
     }
 
     // Successful Roll: register the report through our existing service.
@@ -222,14 +254,11 @@ bool UpdateSimulation()
     Console.WriteLine();    
     Console.WriteLine("*** NEW INCIDENT RECEIVED ***");
 
-    Console.WriteLine(
-        $"#{incidentReport.Id} - {incidentReport.Type}");
+    Console.WriteLine($"#{incidentReport.Id} - {incidentReport.Type}");
 
     Console.WriteLine(incidentReport.Description);
 
-    Console.WriteLine(
-        $"Position: ({incidentReport.Latitude}; " +
-        $"{incidentReport.Longitude})");
+    Console.WriteLine($"Position: ({incidentReport.Latitude}; " + $"{incidentReport.Longitude})");
 
     return true;
 }
