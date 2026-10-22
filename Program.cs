@@ -60,6 +60,8 @@ var dispatchService = new DispatchService(incidentService, rescueUnitService);
 
 var unitTravelSimulationService = new UnitTravelSimulationService(incidentService, rescueUnitService, dispatchService);
 
+var unitReportSimulationService = new UnitReportSimulationService(incidentService, rescueUnitService, dispatchService);
+
 // Temporary starting fleet.
 // No dispatch, arrival or conclusion happens automatically.
 rescueUnitService.RegisterUnit(
@@ -205,6 +207,19 @@ bool UpdateSimulation()
         Console.WriteLine();
         Console.WriteLine();
         Console.WriteLine("*** UNIT UPDATE ***");
+        Console.WriteLine(notification);
+
+        notificationPrinted = true;
+    }
+
+    // On-Scene assessments update independently of incident generation.
+    var reportNotifications = unitReportSimulationService.Update(elapsed);
+
+    foreach (var notification in reportNotifications)
+    {
+        Console.WriteLine();
+        Console.WriteLine();
+        Console.WriteLine("*** SITUATION REPORT RECEIVED ***");
         Console.WriteLine(notification);
 
         notificationPrinted = true;
