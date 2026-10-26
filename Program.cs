@@ -371,6 +371,11 @@ void ShowIncidentBoard()
 
         Console.WriteLine(incident.Description);
 
+        if (incident.BackupRequested)
+        {
+            Console.WriteLine("*** BACKUP REQUEST OUTSTANDING ***");
+        }
+
         Console.WriteLine(
             $"Position: ({incident.Latitude}; {incident.Longitude})");
 
@@ -400,7 +405,7 @@ void ShowIncidentBoard()
 
         if (assignedCount == 0)
         {
-            Console.WriteLine("  No units assigned.");
+            Console.WriteLine("No units assigned.");
         }
     }
 
@@ -515,9 +520,42 @@ void OpenControlModule()
     Console.WriteLine("CONTROL MODULE");
     Console.WriteLine("1. Dispatch available unit");
     Console.WriteLine("2. Reassign unit to another incident");
+    Console.WriteLine("3. Resolve backup request");
     Console.WriteLine("0. Back");
 
     string action = ReadOperatorInput("Choose: ", digitsOnly: true);
+
+    if (action == "3")
+    {
+        int? caseId = ReadId("Incident ID (0 to cancel): ");
+
+        if (caseId is null)
+        {
+            return;
+        }
+
+        string resolution = ReadOperatorInput(
+            "How was the request resolved? ");
+
+        string confirmation = ReadOperatorInput(
+            "Type YES to confirm the backup need has been addressed: ");
+
+        if (!string.Equals(
+            confirmation.Trim(),
+            "YES",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Resolution cancelled.");
+            return;
+        }
+
+        dispatchService.ResolveBackupRequest(
+            caseId.Value,
+            resolution);
+
+        Console.WriteLine("Backup request resolved and logged.");
+        return;
+    }
 
     if (action == "0")
     {
@@ -607,6 +645,11 @@ void ReviewCase()
         $"#{incident.Id} — {incident.Type} [{incident.Status}]");
 
     Console.WriteLine(incident.Description);
+
+    if (incident.BackupRequested)
+    {
+        Console.WriteLine("*** BACKUP REQUEST OUTSTANDING ***");
+    }
 
     PrintIncidentLog(incident.Id);
 

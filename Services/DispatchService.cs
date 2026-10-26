@@ -145,7 +145,7 @@ public class DispatchService
     }
 
     // Adds a situation report from a unit assigned to this incident.
-    public void AddSituationReport(int incidentId, int unitId, string message)
+    public void AddSituationReport(int incidentId, int unitId, string message, bool backupRequested = false)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -193,8 +193,22 @@ public class DispatchService
             throw new InvalidOperationException("The reporting Unit must be assigned.");
         }
 
-        // All checks passed? Store the report using the existing helper.
-        RecordLogEntry(incident, unit, DateTimeOffset.UtcNow, $"{unit.Name} reports: {message.Trim()}");
+        // Store the report, clearly identifying an explicit backup request.
+        string reportMessage = $"{unit.Name} reports: {message.Trim()}";
+
+        if (backupRequested)
+        {
+            reportMessage = "[BACKUP REQUESTED] " + reportMessage;
+        }
+
+        RecordLogEntry(incident, unit, DateTimeOffset.UtcNow, reportMessage);
+
+        // An ordinary update must not clear and outstanding request.
+        if (backupRequested)
+        {
+            incident.BackupRequested = true;
+        }
+        
     }
 
     // Concludes a case after the operator confirms the response is complete.
@@ -202,11 +216,18 @@ public class DispatchService
     {
         var incident = _incidentService.GetIncidentById(incidentId);
 
+
         if (incident is null)
         {
             throw new ArgumentException("Incident not found.");
         }
 
+        if (incident.BackupRequested)
+        {
+            throw new InvalidOperationException(
+                "Please resolve the outstanding backup request before concluding the incident.");
+        }
+        
         if (incident.Status == IncidentStatus.Concluded)
         {
             throw new InvalidOperationException("This incident is already concluded.");
@@ -450,5 +471,42 @@ public class DispatchService
         }
 
         return incidentEntries.AsReadOnly();
+    }
+
+    // Records the operator's decision about an outstanding backup request.
+    public void ResolveBackupRequest(int incidentId, string resolution)
+    {
+        var incident = _incidentService.GetIncidentById(incidentId);
+
+        if (incident is null)
+        {
+            throw new ArgumentException("Incident not found.");
+        }
+
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            throw new InvalidOperationException(
+                "Cannot resolve a backup request on a concluded incident.");
+        }
+
+        if (!incident.BackupRequested)
+        {
+            throw new InvalidOperationException(
+                "This incident has no outstanding backup request.");
+        }
+
+        if (string.IsNullOrWhiteSpace(resolution))
+        {
+            throw new ArgumentException(
+                "Please explain how the backup request was resolved.");
+        }
+
+        RecordLogEntry(
+            incident,
+            null,
+            DateTimeOffset.UtcNow,
+            $"Backup request resolved: {resolution.Trim()}");
+
+        incident.BackupRequested = false;
     }
 }

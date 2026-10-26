@@ -64,13 +64,17 @@ public class UnitReportSimulationService
                 continue;
             }
 
-            string message = CreateAssessment(incident.Type);
+            // Roll once, then use the result for both the wording and tracked state.
+            bool backupRequested = Random.Shared.Next(100) < 25;
+
+            string message = CreateAssessment(incident.Type, backupRequested);
 
             // Reuse validation and operational logging.
             _dispatchService.AddSituationReport(
                 incident.Id,
                 unit.Id,
-                message);
+                message,
+                backupRequested);
 
             _reportedAssignments.Add(assignment.Id);
             _remainingAssessment.Remove(assignment.Id);
@@ -81,7 +85,7 @@ public class UnitReportSimulationService
         return notifications;
     }
 
-    private string CreateAssessment(IncidentType type)
+    private string CreateAssessment(IncidentType type, bool backupRequested)
     {
         string assessment = type switch
         {
@@ -103,9 +107,6 @@ public class UnitReportSimulationService
             _ => throw new ArgumentException(
                 "Unsupported incident type.")
         };
-
-        // Temporary probability until threat and capabilities are modelled.
-        bool backupRequested = Random.Shared.Next(100) < 25;
 
         if (backupRequested)
         {

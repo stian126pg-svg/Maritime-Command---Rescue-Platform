@@ -14,4 +14,7 @@ public class Incident
     
     // Empty until the incident is concluded.
     public DateTimeOffset? ConcludedAt { get; set; }
+
+    // Remains true until the operator records that the request is resolved.
+    public bool BackupRequested { get; set; }
 }
