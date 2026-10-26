@@ -62,20 +62,35 @@ var unitTravelSimulationService = new UnitTravelSimulationService(incidentServic
 
 var unitReportSimulationService = new UnitReportSimulationService(incidentService, rescueUnitService, dispatchService);
 
-// Temporary starting fleet.
+// Temporary starting fleet / example loadouts.
 // No dispatch, arrival or conclusion happens automatically.
+
 rescueUnitService.RegisterUnit(
     "Patrol One",
     UnitType.SmallPatrolBoat,
     59.03,
-    9.72);
-
+    9.72,
+    crewCount: 3,
+    capabilities: new List<Capability>
+    {
+        Capability.Reconnaissance,
+        Capability.SearchAndRescue,
+        Capability.Transport
+    });
+    
 rescueUnitService.RegisterUnit(
     "Rescue Helicopter One",
     UnitType.Helicopter,
     59.10,
-    9.80);
-
+    9.80,
+    crewCount: 4,
+    capabilities: new List<Capability>
+    {
+        Capability.Reconnaissance,
+        Capability.SearchAndRescue,
+        Capability.Medical,
+        Capability.Transport
+    });
 
 // Checks for a possible incoming report every ten seconds.
 TimeSpan incidentInterval = TimeSpan.FromSeconds(10);
@@ -430,6 +445,14 @@ void ShowFleetOverview()
 
         Console.WriteLine(
             $"Position: ({unit.Latitude}; {unit.Longitude})");
+
+        Console.WriteLine($"Crew/operators: {unit.CrewCount}");
+
+        string capabilitySummary = unit.Capabilities.Count == 0 
+            ? "None recorded"
+            : string.Join(", ", unit.Capabilities);
+
+        Console.WriteLine($"Capabilities: {capabilitySummary}");
 
         foreach (var assignment in dispatchService.GetAssignments())
         {

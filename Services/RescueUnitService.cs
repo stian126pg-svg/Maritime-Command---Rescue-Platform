@@ -14,7 +14,9 @@ public class RescueUnitService
         string name,
         UnitType type,
         double latitude,
-        double longitude)
+        double longitude,
+        int crewCount = 1,
+        List<Capability>? capabilities = null)
     {
         // Each Unit needs a name operators can identify them by.
         if (string.IsNullOrWhiteSpace(name))
@@ -53,6 +55,31 @@ public class RescueUnitService
             }
         }
 
+        if (crewCount < 1)
+        {
+            throw new ArgumentException("A unit must have at least one crew member or operator.");
+        }
+
+        // Copy the supplied collection so the caller doesn't own our stored list.
+        var registeredCapabilities = new List<Capability>();
+
+        if (capabilities is not null)
+        {
+            foreach (var capability in capabilities)
+            {
+                if (!Enum.IsDefined(capability))
+                {
+                    throw new ArgumentException("Please selected supported unit capabilities.");
+                }
+
+                // Store each capability only once.
+                if (!registeredCapabilities.Contains(capability))
+                {
+                    registeredCapabilities.Add(capability);
+                }
+            }
+        }
+
         // Our prototype registers units that are ready for dispatch.
         var unit = new RescueUnit
         {
@@ -61,7 +88,9 @@ public class RescueUnitService
             Type = type,
             Status = UnitStatus.Available,
             Latitude = latitude,
-            Longitude = longitude
+            Longitude = longitude,
+            CrewCount = crewCount,
+            Capabilities = registeredCapabilities
         };
 
         _units.Add(unit);

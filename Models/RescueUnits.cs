@@ -10,4 +10,6 @@ public class RescueUnit
     public UnitStatus Status { get; set; }
     public double Latitude { get; set; }
     public double Longitude { get; set; }
+    public int CrewCount { get; set; }
+    public List<Capability> Capabilities { get; set; } = new();
 }
