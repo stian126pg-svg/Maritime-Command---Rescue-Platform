@@ -14,6 +14,10 @@ public class DispatchService
     private readonly List<OperationalLogEntry> _logEntries = new();
     private int _nextLogEntryId = 1;
 
+    // One shared HQ for our prototype.
+    // const means these values cannot change while the program runs.
+    public const double HeadquartersLatitude = 59.03;
+    public const double HeadquartersLongitude = 9.72;
 
     // Receive the services that already hold our incidents and units.
     public DispatchService(IncidentService incidentService, RescueUnitService rescueUnitService)
@@ -227,7 +231,7 @@ public class DispatchService
             throw new InvalidOperationException(
                 "Please resolve the outstanding backup request before concluding the incident.");
         }
-        
+
         if (incident.Status == IncidentStatus.Concluded)
         {
             throw new InvalidOperationException("This incident is already concluded.");
@@ -295,6 +299,41 @@ public class DispatchService
         return incident;
     }
 
+    // Completes the journey home without making the unit dispatch-ready.
+    public RescueUnit RecordReturnToHeadquarters(int unitId)
+    {
+        var unit = _rescueUnitService.GetUnitById(unitId);
+
+        if (unit is null)
+        {
+            throw new ArgumentException("Rescue unit not found.");
+        }
+
+        if (unit.Status != UnitStatus.Returning)
+        {
+            throw new InvalidOperationException(
+                "The unit must be returning before recording arrival at HQ.");
+        }
+
+        // A unit cannot complete its return while still actively assigned.
+        foreach (var assignment in _assignments)
+        {
+            if (assignment.UnitId == unitId &&
+                assignment.EndedAt is null)
+            {
+                throw new InvalidOperationException(
+                    "The unit still has an active assignment.");
+            }
+        }
+
+        // Arrival changes its position, but servicing is still required.
+        unit.Latitude = HeadquartersLatitude;
+        unit.Longitude = HeadquartersLongitude;
+        unit.Status = UnitStatus.Unavailable;
+
+        return unit;
+    }
+
     // Records the operator's assessment of a unit's readiness.
     public RescueUnit AssessUnitReadiness(int unitId, bool readyForDispatch)
     {
@@ -318,6 +357,12 @@ public class DispatchService
         if (unit.Status == UnitStatus.Assigned)
         {
             throw new InvalidOperationException("The unit is still marked as assigned.");
+        }
+
+        // Returning units must reach HQ before their readiness is assessed.
+        if (unit.Status == UnitStatus.Returning)
+        {
+            throw new InvalidOperationException("The unit must arrive at HQ before readiness can be assessed.");
         }
 
         if (readyForDispatch)

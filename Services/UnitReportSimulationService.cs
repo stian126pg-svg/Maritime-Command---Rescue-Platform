@@ -143,9 +143,9 @@ public class UnitReportSimulationService
     }
 
     // Checks whether an active unit at the scene provides this capability.
-private bool HasCapabilityOnScene(
-    int incidentId,
-    Capability requiredCapability)
+    private bool HasCapabilityOnScene(
+        int incidentId,
+        Capability requiredCapability)
     {
         foreach (var assignment in _dispatchService.GetAssignments())
         {

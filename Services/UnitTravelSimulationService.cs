@@ -1,6 +1,6 @@
-using System.Reflection.Metadata.Ecma335;
 using MaritimeCommand.Models;
-using MaritimeCommand.Services;
+
+namespace MaritimeCommand.Services;
 
 // Simulates travel while leaving arrival rules to DispatchService.
 public class UnitTravelSimulationService
@@ -11,6 +11,9 @@ public class UnitTravelSimulationService
 
     // Each assignment gets its own remaining travel time.
     private readonly Dictionary<int, TimeSpan> _remainingTravel = new();
+
+    // Return journeys belong to units, because their assignments have ended.
+    private readonly Dictionary<int, TimeSpan> _remainingReturnTravel = new();
 
     public UnitTravelSimulationService(
         IncidentService incidentService,
@@ -49,7 +52,7 @@ public class UnitTravelSimulationService
             // Start tracking a newly discovered assignment.
             if (!_remainingTravel.ContainsKey(assignment.Id))
             {
-                _remainingTravel[assignment.Id] = CalculateTravelTime(unit, incident);
+                _remainingTravel[assignment.Id] = CalculateTravelTime(unit, incident.Latitude, incident.Longitude);
                 continue;
             }
 
@@ -68,18 +71,55 @@ public class UnitTravelSimulationService
             notifications.Add($"{unit.Name} arrived at incident #{incident.Id}.");
         }
 
+        // Update journeys home separately from incident assignments.
+        foreach (var unit in _rescueUnitService.GetUnits())
+        {
+            if (unit.Status != UnitStatus.Returning)
+            {
+                // Remove any timer belonging to a cancelled return journey.
+                _remainingReturnTravel.Remove(unit.Id);
+                continue;
+            }
+
+            // Start tracking a unit newly released to return to HQ.
+            if (!_remainingReturnTravel.ContainsKey(unit.Id))
+            {
+                _remainingReturnTravel[unit.Id] = CalculateTravelTime(
+                    unit,
+                    DispatchService.HeadquartersLatitude,
+                    DispatchService.HeadquartersLongitude);
+
+                continue;
+            }
+
+            _remainingReturnTravel[unit.Id] -= elapsed;
+
+            if (_remainingReturnTravel[unit.Id] > TimeSpan.Zero)
+            {
+                continue;
+            }
+
+            // Let DispatchService validate and complete the arrival.
+            _dispatchService.RecordReturnToHeadquarters(unit.Id);
+
+            _remainingReturnTravel.Remove(unit.Id);
+
+            notifications.Add(
+                $"{unit.Name} arrived at HQ. " +
+                "Awaiting servicing and readiness assessment.");
+        }
+
         return notifications;
     }
 
-    private TimeSpan CalculateTravelTime(RescueUnit unit, Incident incident)
+    private TimeSpan CalculateTravelTime(RescueUnit unit, double destinationLatitude, double destinationLongitude)
     {
         // Approximate kilometers between nearby coordinates.
-        // Longitude distances shrink as latitude increases.
-        double averageLatitudeRadians = ((unit.Latitude + incident.Latitude) / 2) * Math.PI / 180;
+        double averageLatitudeRadians = ((unit.Latitude + destinationLatitude) / 2) * Math.PI / 180;
 
-        double northSouthKm = (incident.Latitude - unit.Latitude) * 111.2;
+        double northSouthKm = (destinationLatitude - unit.Latitude) * 111.2;
 
-        double eastWestKm = (incident.Longitude - unit.Longitude) * 111.2 * Math.Cos(averageLatitudeRadians);
+        double eastWestKm = (destinationLongitude - unit.Longitude) * 111.2 * Math.Cos(averageLatitudeRadians);
 
         double distanceKm = Math.Sqrt(northSouthKm * northSouthKm + eastWestKm * eastWestKm);
 
@@ -104,4 +144,3 @@ public class UnitTravelSimulationService
         return TimeSpan.FromSeconds(Math.Max(15, simulatedTravelSeconds));
     }
 }
-
