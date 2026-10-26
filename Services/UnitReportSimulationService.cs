@@ -64,8 +64,17 @@ public class UnitReportSimulationService
                 continue;
             }
 
-            // Roll once, then use the result for both the wording and tracked state.
-            bool backupRequested = Random.Shared.Next(100) < 25;
+            // Look up the main capability needed at this incident.
+            Capability? requiredCapability = GetRequiredCapability(incident.Type);
+
+            // Consider the combined capabilities of units already at the scene.
+            bool specialistSupportNeeded = requiredCapability.HasValue && !HasCapabilityOnScene(
+                incident.Id,
+                requiredCapability.Value);
+
+            // Missing specialist equipment requires backup.
+            // Otherwise, unexpected complications still have a 25% chance to occur.
+            bool backupRequested = specialistSupportNeeded || Random.Shared.Next(100) < 25;
 
             string message = CreateAssessment(incident.Type, backupRequested);
 
@@ -116,5 +125,48 @@ public class UnitReportSimulationService
 
         return assessment +
             " No additional units requested at present.";
+    }
+
+    // Identifies the main capability needed for this kind of incident.
+    private static Capability? GetRequiredCapability(IncidentType incidentType)
+    {
+        return incidentType switch
+        {
+            IncidentType.Fire => Capability.Firefighting,
+            IncidentType.MedicalEmergency => Capability.Medical,
+            IncidentType.EmergencyEvacuation => Capability.Transport,
+            IncidentType.SearchAndRescue => Capability.SearchAndRescue,
+
+            // We haven't modelled technical repair or towing equipment yet :(
+            _ => null
+        };
+    }
+
+    // Checks whether an active unit at the scene provides this capability.
+private bool HasCapabilityOnScene(
+    int incidentId,
+    Capability requiredCapability)
+    {
+        foreach (var assignment in _dispatchService.GetAssignments())
+        {
+            // Only consider active assignments at this incident
+            // where the unit has already arrived.
+            if (assignment.IncidentId != incidentId ||
+                assignment.EndedAt is not null ||
+                assignment.ArrivedAt is null)
+            {
+                continue;
+            }
+
+            var unit = _rescueUnitService.GetUnitById(assignment.UnitId);
+
+            if (unit is not null &&
+                unit.Capabilities.Contains(requiredCapability))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

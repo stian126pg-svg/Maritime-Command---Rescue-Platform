@@ -92,6 +92,21 @@ rescueUnitService.RegisterUnit(
         Capability.Transport
     });
 
+// A specialist vessel that can provide firefighting support.
+rescueUnitService.RegisterUnit(
+    "Rescue Vessel One",
+    UnitType.EmergencyVessel,
+    59.05,
+    9.75,
+    crewCount: 6,
+    capabilities: new List<Capability>
+    {
+        Capability.Firefighting,
+        Capability.SearchAndRescue,
+        Capability.Medical,
+        Capability.Transport
+    });
+
 // Checks for a possible incoming report every ten seconds.
 TimeSpan incidentInterval = TimeSpan.FromSeconds(10);
 int maxActiveIncidents = 3;
