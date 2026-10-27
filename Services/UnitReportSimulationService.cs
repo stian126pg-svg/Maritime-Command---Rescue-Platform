@@ -127,6 +127,16 @@ public class UnitReportSimulationService
             " No additional units requested at present.";
     }
 
+    // Copies assessment timers and remembers which reports already happened.
+    public void CaptureState(SimulationState state)
+    {
+        state.RemainingAssessment =
+            new Dictionary<int, TimeSpan>(_remainingAssessment);
+
+        state.ReportedAssignments =
+            new HashSet<int>(_reportedAssignments);
+    }
+
     // Identifies the main capability needed for this kind of incident.
     private static Capability? GetRequiredCapability(IncidentType incidentType)
     {

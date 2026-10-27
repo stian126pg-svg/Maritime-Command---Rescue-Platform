@@ -480,6 +480,12 @@ public class DispatchService
         return _assignments.AsReadOnly();
     }
 
+    // Provides the full operational history for saving.
+    public IReadOnlyList<OperationalLogEntry> GetLogEntries()
+    {
+        return _logEntries.AsReadOnly();
+    }
+
     // Records and event, optionally connected to specific unit.
     private void RecordLogEntry(Incident incident, RescueUnit? rescueUnit, DateTimeOffset timestamp, string message)
     {

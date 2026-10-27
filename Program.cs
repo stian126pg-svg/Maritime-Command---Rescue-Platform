@@ -45,8 +45,18 @@ TO DO:
 - Operator login(?) — identify operators and protect access.
 - V1(?) finish — check the complete workflow, tidy the interface, and finish README + Setup.
 
- */
 
+JSON flow:
+SAVE
+Collect service data and simulation progress
+Write the snapshot to a JSON file
+
+LOAD
+Read and validate the saved snapshot
+Restore collections, ID counters and simulation progress
+Resume without advancing time spent outside the program
+
+ */
 
 // Create each service once.
 // All menu actions use these same instances and their stored collections.

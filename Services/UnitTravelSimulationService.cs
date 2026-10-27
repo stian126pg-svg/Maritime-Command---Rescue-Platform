@@ -81,6 +81,7 @@ public class UnitTravelSimulationService
                 continue;
             }
 
+
             // Start tracking a unit newly released to return to HQ.
             if (!_remainingReturnTravel.ContainsKey(unit.Id))
             {
@@ -112,6 +113,16 @@ public class UnitTravelSimulationService
         return notifications;
     }
 
+    // Copies current journey timers into the snapshot.
+    public void CaptureState(SimulationState state)
+    {
+        state.RemainingTravel =
+            new Dictionary<int, TimeSpan>(_remainingTravel);
+
+        state.RemainingReturnTravel =
+            new Dictionary<int, TimeSpan>(_remainingReturnTravel);
+    }
+    
     private TimeSpan CalculateTravelTime(RescueUnit unit, double destinationLatitude, double destinationLongitude)
     {
         // Approximate kilometers between nearby coordinates.
