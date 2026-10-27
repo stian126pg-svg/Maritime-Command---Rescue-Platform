@@ -58,6 +58,7 @@ Resume without advancing time spent outside the program
 
  */
 
+
 // Create each service once.
 // All menu actions use these same instances and their stored collections.
 var incidentService = new IncidentService();
@@ -71,6 +72,9 @@ var dispatchService = new DispatchService(incidentService, rescueUnitService);
 var unitTravelSimulationService = new UnitTravelSimulationService(incidentService, rescueUnitService, dispatchService);
 
 var unitReportSimulationService = new UnitReportSimulationService(incidentService, rescueUnitService, dispatchService);
+
+// Writes shift snapshots to our local JSON save file.
+var shiftStorageService = new ShiftStorageService();
 
 // Temporary starting fleet / example loadouts.
 // No dispatch, arrival or conclusion happens automatically.
@@ -200,13 +204,37 @@ while (running)
                 break;
 
             case "0":
-                running = false;
-                Console.WriteLine("Command console closed.");
-                break;
+                try
+                {
+                    // Bring timers up to date before capturing the shift.
+                    UpdateSimulation();
 
-            default:
-                Console.WriteLine("Please select a listed option.");
-                break;
+                    var state = CaptureShiftState();
+
+                    // Only close after the save has completed successfully.
+                    shiftStorageService.Save(state);
+
+                    Console.WriteLine($"Shift saved to: {shiftStorageService.SavePath}");
+
+                    running = false;
+                    Console.WriteLine("Command console closed.");
+                }
+
+                catch (IOException error)
+                {
+                    Console.WriteLine($"Could not save the shift: {error.Message}");
+
+                    Console.WriteLine("The Console remains open. Resolve the file issue and retry.");
+                }
+
+                catch (UnauthorizedAccessException error)
+                {
+                    Console.WriteLine($"Permission to write the save was denied: {error.Message}");
+
+                    Console.WriteLine("The Console remains open. Check the save folder permissions.");
+                }
+
+            break;
         }
     }
     catch (ArgumentException error)
@@ -221,6 +249,38 @@ while (running)
 
 // Local functions below run only when called.
 // They reuse the service instances and settings declared above.
+
+// Collects operational records and simulation progress for saving.
+ShiftState CaptureShiftState()
+{
+    // Store time remaining, rather than a deadline that expires offline.
+    TimeSpan untilNextAttempt = nextIncidentAt - DateTimeOffset.UtcNow;
+
+    if (untilNextAttempt < TimeSpan.Zero)
+    {
+        untilNextAttempt = TimeSpan.Zero;
+    }
+
+    var simulation = new SimulationState
+    {
+        IsRunning = automaticIncidentsEnabled,
+        UntilNextIncidentAttempt = untilNextAttempt,
+        CurrentIncidentChance = currentIncidentChance
+    };
+
+    // Each simulation service fills its own part of this snapshot.
+    unitTravelSimulationService.CaptureState(simulation);
+    unitReportSimulationService.CaptureState(simulation);
+
+    return new ShiftState
+    {
+        Incidents = incidentService.GetIncidents().ToList(),
+        Units = rescueUnitService.GetUnits().ToList(),
+        Assignments = dispatchService.GetAssignments().ToList(),
+        LogEntries = dispatchService.GetLogEntries().ToList(),
+        Simulation = simulation
+    };
+}
 
 // Checks whether an automatic incident is due.
 // Returns true when a notification was printed.
