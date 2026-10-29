@@ -246,19 +246,7 @@ bool running = true;
 
 while (running)
 {
-    Console.WriteLine();
-    Console.WriteLine("MARITIME COMMAND & RESCUE");
-    Console.WriteLine("1. Incident board");
-    Console.WriteLine("2. Fleet overview");
-    Console.WriteLine("3. Control module");
-    Console.WriteLine("4. Case review and reports");
-    Console.WriteLine("5. Case history");
-
-    Console.WriteLine(
-        $"6. Pause/resume " +
-        $"[{(automaticIncidentsEnabled ? "Running" : "Paused")}]");
-
-    Console.WriteLine("0. Exit");
+    ShowMainMenu();
 
     string choice = ReadOperatorInput(
         "Choose an option: ",
@@ -547,6 +535,62 @@ int? ReadId(string prompt)
     return id;
 }
 
+// Shows a snapshot of the shift whenever the main menu opens.
+void ShowMainMenu()
+{
+    int activeIncidents = 0;
+    int backupRequests = 0;
+    int availableUnits = 0;
+
+    foreach (var incident in incidentService.GetIncidents())
+    {
+        if (incident.Status == IncidentStatus.Concluded)
+        {
+            continue;
+        }
+
+        activeIncidents++;
+
+        if (incident.BackupRequested)
+        {
+            backupRequests++;
+        }
+    }
+
+    var units = rescueUnitService.GetUnits();
+
+    foreach (var unit in units)
+    {
+        if (unit.Status == UnitStatus.Available)
+        {
+            availableUnits++;
+        }
+    }
+
+    string shiftStatus = automaticIncidentsEnabled
+        ? "Running"
+        : "Paused";
+
+    Console.WriteLine();
+    Console.WriteLine("MARITIME COMMAND & RESCUE");
+
+    Console.WriteLine(
+        $"Shift: {shiftStatus} | " +
+        $"Active cases: {activeIncidents}/{maxActiveIncidents}");
+
+    Console.WriteLine(
+        $"Backup requests: {backupRequests} | " +
+        $"Available units: {availableUnits}/{units.Count}");
+
+    Console.WriteLine();
+    Console.WriteLine("1. Incident board");
+    Console.WriteLine("2. Fleet overview");
+    Console.WriteLine("3. Control module");
+    Console.WriteLine("4. Case review and reports");
+    Console.WriteLine("5. Case history");
+    Console.WriteLine($"6. Pause/resume [{shiftStatus}]");
+    Console.WriteLine("0. Save and exit");
+}
 
 // Shows cases that still need attention.
 void ShowIncidentBoard()
