@@ -104,6 +104,83 @@ public class RescueUnitService
         return _units.AsReadOnly();
     }
 
+    // Restores the saved fleet and continues numbering after its highest ID.
+    public void RestoreUnits(List<RescueUnit> units)
+    {
+        ArgumentNullException.ThrowIfNull(units);
+
+        // Check the incoming collection before replacing the current fleet.
+        var restoredUnits = new List<RescueUnit>(units);
+
+        var seenIds = new HashSet<int>();
+
+        // Match registration's rule: names are unique regardless of casing.
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        int highestId = 0;
+
+        foreach (var unit in restoredUnits)
+        {
+            if (unit is null)
+            {
+                throw new InvalidDataException("The save contains a missing rescue unit record.");
+            }
+
+            if (unit.Id < 1 || unit.Id == int.MaxValue || !seenIds.Add(unit.Id))
+            {
+                throw new InvalidDataException("The save contains an invalid or duplicate rescue unit ID.");
+            }
+
+            if (string.IsNullOrWhiteSpace(unit.Name) || !seenNames.Add(unit.Name.Trim()))
+            {
+                throw new InvalidDataException("The save contains a missing or duplicate rescue unit name.");
+            }
+
+            if (!Enum.IsDefined(unit.Type) || !Enum.IsDefined(unit.Status))
+            {
+                throw new InvalidDataException($"Unit #{unit.Id} has an unsupported type or status.");
+            }
+
+            if (!double.IsFinite(unit.Latitude) ||
+                unit.Latitude < -90 ||
+                unit.Latitude > 90 ||
+                !double.IsFinite(unit.Longitude) ||
+                unit.Longitude < -180 ||
+                unit.Longitude > 180)
+            {
+                throw new InvalidDataException($"Unit #{unit.Id} has invalid coordinates.");
+            }
+
+            if (unit.CrewCount < 1)
+            {
+                throw new InvalidDataException($"Unit #{unit.Id} must have at least one crew member or operator.");
+            }
+
+            if (unit.Capabilities is null)
+            {
+                throw new InvalidDataException($"Unit #{unit.Id} is missing its capability list.");
+            }
+
+            var seenCapabilities = new HashSet<Capability>();
+
+            foreach (var capability in unit.Capabilities)
+            {
+                if (!Enum.IsDefined(capability) || !seenCapabilities.Add(capability))
+                {
+                    throw new InvalidDataException($"Unit #{unit.Id} has an unsupported or duplicate capability.");
+                }
+            }
+
+            highestId = Math.Max(highestId, unit.Id);
+        }
+
+        // Every record passed: replace the fleet and restore its ID counter.
+        _units.Clear();
+        _units.AddRange(restoredUnits);
+
+        _nextUnitId = highestId + 1;
+    }
+
     // Finds a particular unit or returns null if it does not exist.
     public RescueUnit? GetUnitById(int id)
     {

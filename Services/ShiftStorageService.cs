@@ -21,7 +21,7 @@ public class ShiftStorageService
     };
 
     public void Save(ShiftState state)
-    {
+    {   
         ArgumentNullException.ThrowIfNull(state);
 
         // Make sure the save folder exists before writing.
@@ -38,5 +38,64 @@ public class ShiftStorageService
 
         File.WriteAllText(temporaryPath, json);
         File.Move(temporaryPath, SavePath, overwrite: true);
+    }
+
+    // Reads a saved shift without changing the running services.
+    public ShiftState? Load()
+    {
+        string json;
+
+        try
+        {
+            json = File.ReadAllText(SavePath);
+        }
+
+        catch (FileNotFoundException)
+        {
+            // No save yet: the application can start a fresh shift.
+            return null;
+        }
+
+        catch (DirectoryNotFoundException)
+        {
+            // The save folder might not exist on the first run.
+            return null;
+        }
+
+        // Convert the JSON text back into our C# snapshot object.
+        var state = JsonSerializer.Deserialize<ShiftState>(json, _jsonOptions);
+
+        if (state is null)
+        {
+            throw new InvalidDataException("The save file does not contain a shift.");
+        }
+
+        // Only accept a save format we currently understand.
+        if (state.SaveVersion != 1)
+        {
+            throw new InvalidDataException($"Unsuported save version: {state.SaveVersion}.");
+        }
+
+        // JSON can contain explicit nulls, even for non-nullable properties.
+        if (state.SavedAt == default ||
+            state.Incidents is null ||
+            state.Units is null ||
+            state.Assignments is null ||
+            state.LogEntries is null ||
+            state.Simulation is null)
+        {
+            throw new InvalidDataException("The save file is missing shift data.");
+        }
+
+        var simulation = state.Simulation;
+
+        if (simulation.RemainingTravel is null ||
+            simulation.RemainingReturnTravel is null ||
+            simulation.RemainingAssessment is null ||
+            simulation.ReportedAssignments is null)
+        {
+            throw new InvalidDataException("The save file is missing simulation collections.");
+        }
+        return state;
     }
 }

@@ -56,6 +56,14 @@ Read and validate the saved snapshot
 Restore collections, ID counters and simulation progress
 Resume without advancing time spent outside the program
 
+
+// Saving: C# object → JSON text
+JsonSerializer.Serialize(state, _jsonOptions);
+
+// Loading: JSON text → C# object
+JsonSerializer.Deserialize<ShiftState>(json, _jsonOptions);
+
+
  */
 
 
@@ -76,50 +84,73 @@ var unitReportSimulationService = new UnitReportSimulationService(incidentServic
 // Writes shift snapshots to our local JSON save file.
 var shiftStorageService = new ShiftStorageService();
 
-// Temporary starting fleet / example loadouts.
-// No dispatch, arrival or conclusion happens automatically.
+// Read the snapshot before deciding whether to create a starting fleet.
+ShiftState? savedShift;
 
-rescueUnitService.RegisterUnit(
-    "Patrol One",
-    UnitType.SmallPatrolBoat,
-    59.03,
-    9.72,
-    crewCount: 3,
-    capabilities: new List<Capability>
-    {
-        Capability.Reconnaissance,
-        Capability.SearchAndRescue,
-        Capability.Transport
-    });
-    
-rescueUnitService.RegisterUnit(
-    "Rescue Helicopter One",
-    UnitType.Helicopter,
-    59.10,
-    9.80,
-    crewCount: 4,
-    capabilities: new List<Capability>
-    {
-        Capability.Reconnaissance,
-        Capability.SearchAndRescue,
-        Capability.Medical,
-        Capability.Transport
-    });
+try
+{
+    savedShift = shiftStorageService.Load();
+}
+catch (Exception error) when (
+    error is IOException or
+    UnauthorizedAccessException or
+    System.Text.Json.JsonException or
+    InvalidDataException)
+{
+    Console.WriteLine($"Could not load the shift: {error.Message}");
+    Console.WriteLine($"Save location: {shiftStorageService.SavePath}");
+    Console.WriteLine("Startup stopped. The existing save was not changed.");
+    return;
+}
 
-// A specialist vessel that can provide firefighting support.
-rescueUnitService.RegisterUnit(
-    "Rescue Vessel One",
-    UnitType.EmergencyVessel,
-    59.05,
-    9.75,
-    crewCount: 6,
-    capabilities: new List<Capability>
-    {
-        Capability.Firefighting,
-        Capability.SearchAndRescue,
-        Capability.Medical,
-        Capability.Transport
-    });
+// Create example units only when no saved shift exists.
+if (savedShift is null)
+{
+    // Temporary starting fleet / example loadouts.
+    // No dispatch, arrival or conclusion happens automatically.
+
+    rescueUnitService.RegisterUnit(
+        "Patrol One",
+        UnitType.SmallPatrolBoat,
+        59.03,
+        9.72,
+        crewCount: 3,
+        capabilities: new List<Capability>
+        {
+            Capability.Reconnaissance,
+            Capability.SearchAndRescue,
+            Capability.Transport
+        });
+        
+    rescueUnitService.RegisterUnit(
+        "Rescue Helicopter One",
+        UnitType.Helicopter,
+        59.10,
+        9.80,
+        crewCount: 4,
+        capabilities: new List<Capability>
+        {
+            Capability.Reconnaissance,
+            Capability.SearchAndRescue,
+            Capability.Medical,
+            Capability.Transport
+        });
+
+    // A specialist vessel that can provide firefighting support.
+    rescueUnitService.RegisterUnit(
+        "Rescue Vessel One",
+        UnitType.EmergencyVessel,
+        59.05,
+        9.75,
+        crewCount: 6,
+        capabilities: new List<Capability>
+        {
+            Capability.Firefighting,
+            Capability.SearchAndRescue,
+            Capability.Medical,
+            Capability.Transport
+        });
+}
 
 // Checks for a possible incoming report every ten seconds.
 TimeSpan incidentInterval = TimeSpan.FromSeconds(10);
@@ -140,6 +171,75 @@ DateTimeOffset nextIncidentAt = DateTimeOffset.UtcNow.Add(incidentInterval);
 var simulationClock = System.Diagnostics.Stopwatch.StartNew();
 
 TimeSpan previousSimulationCheck = simulationClock.Elapsed;
+
+if (savedShift is not null)
+{
+    try
+    {
+        var simulation = savedShift.Simulation;
+
+        // These saved values must fit our current simulation settings.
+        if (simulation.CurrentIncidentChance < initialIncidentChance ||
+            simulation.CurrentIncidentChance > maximumIncidentChance ||
+            simulation.UntilNextIncidentAttempt < TimeSpan.Zero ||
+            simulation.UntilNextIncidentAttempt > incidentInterval)
+        {
+            throw new InvalidDataException(
+                "The save contains invalid incident generation settings.");
+        }
+
+        // Restore records before the services that reference them.
+        incidentService.RestoreIncidents(savedShift.Incidents);
+        rescueUnitService.RestoreUnits(savedShift.Units);
+
+        // Check incident lifecycle information before restoring assignments.
+        foreach (var incident in incidentService.GetIncidents())
+        {
+            bool isConcluded =
+                incident.Status == IncidentStatus.Concluded;
+
+            if (isConcluded != incident.ConcludedAt.HasValue ||
+                (incident.ConcludedAt is DateTimeOffset concludedAt &&
+                 concludedAt < incident.ReportedAt) ||
+                (isConcluded && incident.BackupRequested))
+            {
+                throw new InvalidDataException(
+                    $"Incident #{incident.Id} has inconsistent conclusion data.");
+            }
+        }
+
+        dispatchService.RestoreAssignments(savedShift.Assignments);
+        dispatchService.RestoreLogEntries(savedShift.LogEntries);
+
+        // Timers can now check their restored assignments and units.
+        unitTravelSimulationService.RestoreState(simulation);
+        unitReportSimulationService.RestoreState(simulation);
+
+        automaticIncidentsEnabled = simulation.IsRunning;
+        currentIncidentChance = simulation.CurrentIncidentChance;
+
+        // Resume the remaining interval from now, ignoring time spent offline.
+        nextIncidentAt = DateTimeOffset.UtcNow.Add(
+            simulation.UntilNextIncidentAttempt);
+
+        // Loading time must not count as simulation time.
+        previousSimulationCheck = simulationClock.Elapsed;
+
+        Console.WriteLine(
+            $"Shift restored from {savedShift.SavedAt:yyyy-MM-dd HH:mm:ss} UTC.");
+    }
+    catch (InvalidDataException error)
+    {
+        Console.WriteLine($"Could not restore the shift: {error.Message}");
+        Console.WriteLine("Startup stopped. The existing save was not changed.");
+        return;
+    }
+}
+
+else
+{
+    Console.WriteLine("New shift started.");
+}
 
 // Keep showing the menu until the operator chooses to exit.
 bool running = true;

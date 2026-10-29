@@ -137,6 +137,81 @@ public class UnitReportSimulationService
             new HashSet<int>(_reportedAssignments);
     }
 
+    // Restores report progress after assignments have been restored.
+    public void RestoreState(SimulationState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.RemainingAssessment is null ||
+            state.ReportedAssignments is null)
+        {
+            throw new InvalidDataException(
+                "The save is missing report simulation collections.");
+        }
+
+        // Validate separate copies before changing the running simulation.
+        var assessmentTimers =
+            new Dictionary<int, TimeSpan>(state.RemainingAssessment);
+
+        var reportedAssignments =
+            new HashSet<int>(state.ReportedAssignments);
+
+        var assignments = _dispatchService.GetAssignments()
+            .ToDictionary(assignment => assignment.Id);
+
+        foreach (var timer in assessmentTimers)
+        {
+            if (timer.Value < TimeSpan.Zero ||
+                !assignments.TryGetValue(timer.Key, out var assignment))
+            {
+                throw new InvalidDataException(
+                    "The save contains an invalid assessment timer.");
+            }
+
+            // Assessments belong to active assignments already on scene.
+            if (assignment.EndedAt is not null ||
+                assignment.ArrivedAt is null)
+            {
+                throw new InvalidDataException(
+                    $"Assignment #{assignment.Id} should not have an assessment timer.");
+            }
+
+            // A completed initial report must not also be waiting to happen.
+            if (reportedAssignments.Contains(assignment.Id))
+            {
+                throw new InvalidDataException(
+                    $"Assignment #{assignment.Id} has both a pending and completed report.");
+            }
+        }
+
+        foreach (int assignmentId in reportedAssignments)
+        {
+            if (!assignments.TryGetValue(assignmentId, out var assignment))
+            {
+                throw new InvalidDataException(
+                    $"A completed report references missing assignment #{assignmentId}.");
+            }
+
+            if (assignment.ArrivedAt is null)
+            {
+                throw new InvalidDataException(
+                    $"Assignment #{assignmentId} has a completed assessment without arrival.");
+            }
+        }
+
+        // All checks passed: restore pending assessments.
+        _remainingAssessment.Clear();
+
+        foreach (var timer in assessmentTimers)
+        {
+            _remainingAssessment.Add(timer.Key, timer.Value);
+        }
+
+        // Restore the memory of reports already produced.
+        _reportedAssignments.Clear();
+        _reportedAssignments.UnionWith(reportedAssignments);
+    }
+
     // Identifies the main capability needed for this kind of incident.
     private static Capability? GetRequiredCapability(IncidentType incidentType)
     {

@@ -122,7 +122,77 @@ public class UnitTravelSimulationService
         state.RemainingReturnTravel =
             new Dictionary<int, TimeSpan>(_remainingReturnTravel);
     }
-    
+
+    // Restores journey timers after incidents, units and assignments are restored.
+    public void RestoreState(SimulationState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.RemainingTravel is null ||
+            state.RemainingReturnTravel is null)
+        {
+            throw new InvalidDataException(
+                "The save is missing travel timer collections.");
+        }
+
+        // Make separate copies and validate before changing current timers.
+        var travelTimers =
+            new Dictionary<int, TimeSpan>(state.RemainingTravel);
+
+        var returnTimers =
+            new Dictionary<int, TimeSpan>(state.RemainingReturnTravel);
+
+        var assignments = _dispatchService.GetAssignments()
+            .ToDictionary(assignment => assignment.Id);
+
+        foreach (var timer in travelTimers)
+        {
+            // The timer's key is an assignment ID.
+            if (timer.Value < TimeSpan.Zero ||
+                !assignments.TryGetValue(timer.Key, out var assignment))
+            {
+                throw new InvalidDataException(
+                    "The save contains an invalid outbound travel timer.");
+            }
+
+            if (assignment.EndedAt is not null ||
+                assignment.ArrivedAt is not null)
+            {
+                throw new InvalidDataException(
+                    $"Assignment #{assignment.Id} should not have a travel timer.");
+            }
+        }
+
+        foreach (var timer in returnTimers)
+        {
+            // Return timer keys are unit IDs, rather than assignment IDs.
+            var unit = _rescueUnitService.GetUnitById(timer.Key);
+
+            if (timer.Value < TimeSpan.Zero ||
+                unit is null ||
+                unit.Status != UnitStatus.Returning)
+            {
+                throw new InvalidDataException(
+                    "The save contains an invalid return journey timer.");
+            }
+        }
+
+        // Every timer passed: replace the current simulation progress.
+        _remainingTravel.Clear();
+
+        foreach (var timer in travelTimers)
+        {
+            _remainingTravel.Add(timer.Key, timer.Value);
+        }
+
+        _remainingReturnTravel.Clear();
+
+        foreach (var timer in returnTimers)
+        {
+            _remainingReturnTravel.Add(timer.Key, timer.Value);
+        }
+    }
+
     private TimeSpan CalculateTravelTime(RescueUnit unit, double destinationLatitude, double destinationLongitude)
     {
         // Approximate kilometers between nearby coordinates.

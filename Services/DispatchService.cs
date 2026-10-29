@@ -480,10 +480,162 @@ public class DispatchService
         return _assignments.AsReadOnly();
     }
 
+    // Restores assignment history after incidents and units have been restored.
+    public void RestoreAssignments(List<Assignment> assignments)
+    {
+        ArgumentNullException.ThrowIfNull(assignments);
+
+        var restoredAssignments = new List<Assignment>(assignments);
+        var seenIds = new HashSet<int>();
+        var activelyAssignedUnitIds = new HashSet<int>();
+
+        int highestId = 0;
+
+        foreach (var assignment in restoredAssignments)
+        {
+            if (assignment is null)
+            {
+                throw new InvalidDataException("The save contains a missing assignment record.");
+            }
+
+            if (assignment.Id < 1 || assignment.Id == int.MaxValue || !seenIds.Add(assignment.Id))
+            {
+                throw new InvalidDataException("The save contains an invalid or duplicate assignment ID.");
+            }
+
+            var incident = _incidentService.GetIncidentById(assignment.IncidentId);
+
+            var unit = _rescueUnitService.GetUnitById(assignment.UnitId);
+
+            if (incident is null || unit is null)
+            {
+                throw new InvalidDataException($"Assignment #{assignment.Id} references a missing incident or unit.");
+            }
+
+            // Arrival and ending cannot happen before dispatch.
+            if (assignment.AssignedAt == default ||
+                (assignment.ArrivedAt is DateTimeOffset arrivedAt &&
+                arrivedAt < assignment.AssignedAt) ||
+                (assignment.EndedAt is DateTimeOffset endedAt &&
+                endedAt < assignment.AssignedAt))
+            {
+                throw new InvalidDataException($"Assignment #{assignment.Id} has invalid timestamps.");
+            }
+
+            // An arrival cannot happen after the assignment has ended.
+            if (assignment.ArrivedAt is DateTimeOffset arrival &&
+                assignment.EndedAt is DateTimeOffset ending &&
+                arrival > ending)
+            {
+                throw new InvalidDataException($"Assignment #{assignment.Id} records arrival after ending.");
+            }
+
+            if (assignment.EndedAt is null)
+            {
+                // Active assignments must agree with operational statuses.
+                if (incident.Status != IncidentStatus.Ongoing || unit.Status != UnitStatus.Assigned)
+                {
+                    throw new InvalidDataException($"Active assignment #{assignment.Id} has inconsistent statuses.");
+                }
+
+                if (!activelyAssignedUnitIds.Add(unit.Id))
+                {
+                    throw new InvalidDataException($"Unit #{unit.Id} has multiple active assignments.");
+                }
+            }
+
+            highestId = Math.Max(highestId, assignment.Id);
+        }
+
+        // Also check the opposite direction:
+        // every Assigned unit must have an active assignment.
+        foreach (var unit in _rescueUnitService.GetUnits())
+        {
+            if (unit.Status == UnitStatus.Assigned && !activelyAssignedUnitIds.Contains(unit.Id))
+            {
+                throw new InvalidDataException($"Unit #{unit.Id} is Assigned but has no active assignment.");
+            }
+        }
+
+        // All checks passed: replace assignment history and resume numbering.
+        _assignments.Clear();
+        _assignments.AddRange(restoredAssignments);
+
+        _nextAssignmentId = highestId + 1;
+    }
+
     // Provides the full operational history for saving.
     public IReadOnlyList<OperationalLogEntry> GetLogEntries()
     {
         return _logEntries.AsReadOnly();
+    }
+
+    // Restores operational history after incidents and units are restored.
+    public void RestoreLogEntries(List<OperationalLogEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var restoredEntries = new List<OperationalLogEntry>(entries);
+        var seenIds = new HashSet<int>();
+
+        int highestId = 0;
+
+        foreach (var entry in restoredEntries)
+        {
+            if (entry is null)
+            {
+                throw new InvalidDataException(
+                    "The save contains a missing operational log entry.");
+            }
+
+            if (entry.Id < 1 ||
+                entry.Id == int.MaxValue ||
+                !seenIds.Add(entry.Id))
+            {
+                throw new InvalidDataException(
+                    "The save contains an invalid or duplicate log entry ID.");
+            }
+
+            if (_incidentService.GetIncidentById(entry.IncidentId) is null)
+            {
+                throw new InvalidDataException(
+                    $"Log entry #{entry.Id} references a missing incident.");
+            }
+
+            // Some entries describe the case itself, without a specific unit.
+            if (entry.UnitId is int unitId &&
+                _rescueUnitService.GetUnitById(unitId) is null)
+            {
+                throw new InvalidDataException(
+                    $"Log entry #{entry.Id} references a missing rescue unit.");
+            }
+
+            if (entry.Timestamp == default ||
+                string.IsNullOrWhiteSpace(entry.Message))
+            {
+                throw new InvalidDataException(
+                    $"Log entry #{entry.Id} is missing its timestamp or message.");
+            }
+
+            if (!double.IsFinite(entry.Latitude) ||
+                entry.Latitude < -90 ||
+                entry.Latitude > 90 ||
+                !double.IsFinite(entry.Longitude) ||
+                entry.Longitude < -180 ||
+                entry.Longitude > 180)
+            {
+                throw new InvalidDataException(
+                    $"Log entry #{entry.Id} has invalid coordinates.");
+            }
+
+            highestId = Math.Max(highestId, entry.Id);
+        }
+
+        // Preserve the recorded sequence and original timestamps.
+        _logEntries.Clear();
+        _logEntries.AddRange(restoredEntries);
+
+        _nextLogEntryId = highestId + 1;
     }
 
     // Records and event, optionally connected to specific unit.

@@ -68,6 +68,66 @@ public class IncidentService
         return _incidents.AsReadOnly();
     }
 
+    // Restores saved incidents and resumes numbering after the highest saved ID.
+    public void RestoreIncidents(List<Incident> incidents)
+    {
+        ArgumentNullException.ThrowIfNull(incidents);
+
+        // Copy the collection before checking or changing anything.
+        var restoredIncidents = new List<Incident>(incidents);
+
+        var seenIds = new HashSet<int>();
+        int highestId = 0;
+
+        foreach (var incident in restoredIncidents)
+        {
+            if (incident is null)
+            {
+                throw new InvalidDataException("The save contains a missing incident record.");
+            }
+
+            // IDs must be positive, unique and leave room for the next id.
+            if (incident.Id < 1 || incident.Id == int.MaxValue || !seenIds.Add(incident.Id))
+            {
+                throw new InvalidDataException("The save contains an invalid or duplicate incident ID.");
+            }
+
+            if (!Enum.IsDefined(incident.Type) || !Enum.IsDefined(incident.Status))
+            {
+                throw new InvalidDataException($"Incident #{incident.Id} has an unsupported type or status.");
+            }
+
+            if (string.IsNullOrWhiteSpace(incident.Description))
+            {
+                throw new InvalidDataException($"Incident #{incident.Id} is missing its description.");
+            }
+
+            if (!double.IsFinite(incident.Latitude) ||
+                incident.Latitude < -90 ||
+                incident.Latitude > 90 ||
+                !double.IsFinite(incident.Longitude) ||
+                incident.Longitude < -180 ||
+                incident.Longitude > 180)
+            {
+                throw new InvalidDataException(
+                    $"Incident #{incident.Id} has invalid coordinates.");
+            }
+
+            if (incident.ReportedAt == default)
+            {
+                throw new InvalidDataException($"Incident #{incident.Id} is missing its reported timestamp.");
+            }
+
+            highestId = Math.Max(highestId, incident.Id);
+        }
+
+        // Only replace the current collection after every record passes.
+        _incidents.Clear();
+        _incidents.AddRange(restoredIncidents);
+
+        _nextIncidentId = highestId + 1;
+    }
+
     // Returns the matching incident, or null if the ID doesn't exist.
     public Incident? GetIncidentById(int id)
     {
